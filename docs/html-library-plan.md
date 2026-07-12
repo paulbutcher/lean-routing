@@ -327,31 +327,35 @@ as another `Category`.
       by checking job counts, not by assumption).
 
 ### Phase 2 — Escaping & attribute rendering
-- [ ] `escape` for text content and attribute values (single, carefully
+- [x] `escape` for text content and attribute values (single, carefully
       ordered function — `&` must be replaced first, or later replacements
       corrupt it; carry this ordering forward, it's a genuine correctness
-      detail, not incidental).
-- [ ] **Proof**: `escape`'s output never contains a raw (unescaped) `<`,
-      `>`, or `"`. This is the actual XSS-relevant safety property and the
-      main piece of formal verification worth doing for v1. Decide
-      representation (see 1.7) as part of this task.
-- [ ] **State as an explicit precondition of the above proof, and enforce
-      it in the renderer**: attribute values are *always* rendered
-      double-quote-delimited — the renderer never emits unquoted or
-      single-quoted attribute syntax. HTML5 permits unquoted attribute
-      values; if the renderer ever emitted one, escaping only `<`/`>`/`"`
-      stops being sufficient (a bare space or `>` breaks out of an unquoted
-      value) and the proof's guarantee silently stops applying to that
-      codepath. Pin this down now so it isn't rediscovered by surprise if
-      someone adds unquoted rendering later.
-- [ ] **Proof or explicit argument**: composing already-escaped fragments
-      (`escape a ++ escape b`) behaves the same as escaping the
-      concatenation in context — i.e. no double-escaping and no
-      under-escaping at fragment boundaries. This is the formal version of
-      the "`&` must go first" ordering note above; worth a lemma rather
-      than leaving the ordering constraint as a comment.
-- [ ] `#guard` tests per metacharacter and combinations (`<script>`,
-      `"onclick="`, literal `&`, empty string, non-ASCII).
+      detail, not incidental). Implemented in `Html/Escape.lean` as a
+      structural fold over `List Char` (`escapeChar` + `escape`), per
+      1.7's recommendation and matching the Phase 0 spike.
+- [x] **Proof**: `escape`'s output never contains a raw (unescaped) `<`,
+      `>`, or `"` — `Html.escape_safe`. Reused the Phase 0 spike's proof
+      structure directly (private `Bool`-valued `isDangerous` internally,
+      for `decide`; public theorem stated in plain `Prop` equalities at
+      the boundary). Zero Mathlib, zero `sorry` — verified with
+      `#print axioms`, depends only on the standard core axioms
+      (`propext`, `Classical.choice`, `Quot.sound`), no `sorryAx`.
+- [x] **State as an explicit precondition of the above proof, and enforce
+      it in the renderer**: `Html.renderAttr` always emits
+      `name="escaped value"` with a hard-coded double quote — there is no
+      codepath in this library that renders an attribute value unquoted or
+      single-quoted. Documented on `renderAttr` itself as a load-bearing
+      precondition of `escape_safe`'s guarantee, not a stylistic default.
+- [x] **Proof**: `Html.escape_append` — `escape (a ++ b) = escape a ++
+      escape b`, composing already-escaped fragments behaves the same as
+      escaping the concatenation. Also zero Mathlib, zero `sorry`.
+- [x] `#guard` tests per metacharacter and combinations (`<script>`,
+      `"onclick="`, literal `&`, empty string, non-ASCII, all four
+      metacharacters together, and a re-escaping case
+      `escape "&amp;" = "&amp;amp;"` documenting that already-escaped
+      input is not special-cased). Plus `renderAttr` guards. Verified the
+      guards catch a regression the same way as Phase 1 (deliberately
+      broke one, confirmed `lake build` fails, restored).
 
 ### Phase 3 — Attributes
 - [ ] `HtmlAttrs` (global: `id`, `class`; extend with `style`/`title`/
