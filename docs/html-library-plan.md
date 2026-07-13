@@ -214,7 +214,57 @@ as another `Category`.
   typecheck" regression cases without inventing a separate negative-compile
   CI mechanism. Check this before treating that as an open question.
 
-## 2. Implementation plan (v1: html only, no htmx)
+### 1.8 `Coe String (Option String)` to avoid `some`-noise at attribute call sites (post-v1 ergonomics pass)
+
+Every optional attribute field (`HtmlAttrs`, `AAttrs`, `InputAttrs`,
+`HtmxAttrs`'s 17 fields, ...) is `Option String := none`, so setting one in
+a struct literal required `some` at every call site
+(`{ id := some "x", class_ := some "y" }`). Spiked and adopted: a `scoped
+instance : Coe String (Option String) := ⟨some⟩` inside `namespace
+Html`/`namespace Htmx` (`Html/Attrs.lean`, `Htmx/Attrs.lean`) lets `{ id :=
+"x" }` elaborate directly, both in a bare struct literal and through a real
+tag call's named default argument (`div [] (attrs := { id := "x" })`).
+Confirmed empirically working transitively via `import Html`/`import
+Htmx.Attrs` in files that never `open` those namespaces (e.g.
+`Htmx/Tags.lean`, which uses qualified `Html.HtmlAttrs` literals) — the
+exact activation rule wasn't nailed down further since the build is the
+ground truth here, not the theory.
+
+**Not a repeat of 1.2's coercion-insertion friction**, and worth stating
+precisely why: 1.2 broke because the `Coe` shared a type variable between
+source and target that was still an unresolved metavariable when Lean
+compared the isolated-elaborated argument against the expected type
+(`Node .phrasing ?m` vs. `Node .flow HtmxAttrs`). `Option String` is fully
+concrete on both sides here, so there's no metavariable for coercion
+insertion to choke on. Confirmed by spiking a deliberately wrong-typed
+field (`{ id := true }`): the error is a plain, direct "Type mismatch: true
+has type Bool but is expected to have type Option String", not 1.2's opaque
+`Application type mismatch: ... ?m.7`. Added as a `#guard_msgs` regression
+test (`Html/Attrs.lean`) so this doesn't silently regress back to 1.2-style
+opacity if the mechanism ever changes.
+
+**Rejected the same treatment for `HxSwap` (`hxSwap : Option HxSwap`) after
+spiking it** — a real, different failure mode, not a variant of 1.2's:
+leading-dot notation (`hxSwap := .outerHTML`) resolves its identifier
+against the *expected* type's namespace directly (`Option`, looking for
+`Option.outerHTML`) and never falls back to try a coercion source's
+namespace, so `Coe HxSwap (Option HxSwap)` doesn't fire for the common case
+at all — confirmed by the exact "Unknown constant `Option.outerHTML`"
+error. Worse: because `HxSwap` happens to have its own `none` constructor,
+the one case that *does* typecheck (`hxSwap := .none`) silently resolves to
+`Option.none` (attribute absent) instead of `some HxSwap.none` (renders
+`hx-swap="none"`) — a silent-wrong-behavior footgun with no matching
+ergonomic upside. Reverted; `hxSwap` keeps `some .outerHTML`/`some .none`
+explicit, documented in `Htmx/Attrs.lean` next to the instance list so it
+isn't rediscovered by surprise. **Takeaway for any future `Option Enum`
+field**: this `Coe` trick is safe for literal-syntax types (`String`,
+`Bool` via `true`/`false`, presumably `Nat`/numerals) but not for types
+whose values are conventionally written via leading-dot notation.
+
+`scoped` (rather than a bare top-level instance) was a deliberate choice to
+keep blast radius down — it only searches when resolving against a type
+that routes through `Html`/`Htmx`, rather than making *every* `Option
+String` anywhere accept a bare `String` silently.
 
 ### Phase 0 — Scoping decisions (do first, needs a decision each)
 - [x] Confirm/trim the v1 element list. **Decision: accept the proposed

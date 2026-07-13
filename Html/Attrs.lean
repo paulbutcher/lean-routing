@@ -9,6 +9,21 @@ parameters.
 
 namespace Html
 
+/-- Lets `{ id := "x" }` elaborate directly against an `Option String`
+field without writing `some "x"` -- every optional attribute field in this
+file is `Option String`, so without this every struct literal that sets
+one is `some`-noise. Scoped to `Html` so it only fires for code that
+opens/is inside this namespace, not any `Option String` anywhere.
+Deliberately *not* the same shape as the `Coe (Node .phrasing) (Node
+.flow)` friction in `docs/html-library-plan.md` 1.2: that broke because
+the coercion shared an unresolved metavariable (the phantom `Category`/`α`
+index) between source and target. Here both sides are fully concrete, so
+there's no metavariable for coercion insertion to choke on -- confirmed by
+spike, including that a genuine type error (e.g. `id := true`) still
+produces a plain, direct message rather than 1.2's opaque one (see
+`#guard_msgs` example below). -/
+scoped instance : Coe String (Option String) := ⟨some⟩
+
 /-- Render a boolean attribute: the bare attribute name when `true`,
 absent entirely when `false` -- HTML5 boolean-attribute semantics treat
 *any* value (including `"false"`) as present, so `name="false"` would be
@@ -110,24 +125,40 @@ structure LinkAttrs where
 def LinkAttrs.render (a : LinkAttrs) : String :=
   renderAttr "rel" a.rel ++ renderAttr "href" a.href
 
--- #guard tests, one (or more) per attribute.
+-- #guard tests, one (or more) per attribute. Optional `String` fields are
+-- set via the `Coe String (Option String)` instance above, not `some` --
+-- see that instance's doc comment for why this is safe here.
 #guard HtmlAttrs.render {} = ""
-#guard HtmlAttrs.render { id := some "x" } = " id=\"x\""
-#guard HtmlAttrs.render { class_ := some "a b" } = " class=\"a b\""
-#guard HtmlAttrs.render { style := some "color:red" } = " style=\"color:red\""
-#guard HtmlAttrs.render { title := some "t" } = " title=\"t\""
-#guard HtmlAttrs.render { lang := some "en" } = " lang=\"en\""
-#guard HtmlAttrs.render { dir := some "ltr" } = " dir=\"ltr\""
-#guard HtmlAttrs.render { id := some "x", class_ := some "y" } = " id=\"x\" class=\"y\""
-#guard HtmlAttrs.render { id := some "x\"y" } = " id=\"x&quot;y\""  -- values still escaped
+#guard HtmlAttrs.render { id := "x" } = " id=\"x\""
+#guard HtmlAttrs.render { class_ := "a b" } = " class=\"a b\""
+#guard HtmlAttrs.render { style := "color:red" } = " style=\"color:red\""
+#guard HtmlAttrs.render { title := "t" } = " title=\"t\""
+#guard HtmlAttrs.render { lang := "en" } = " lang=\"en\""
+#guard HtmlAttrs.render { dir := "ltr" } = " dir=\"ltr\""
+#guard HtmlAttrs.render { id := "x", class_ := "y" } = " id=\"x\" class=\"y\""
+#guard HtmlAttrs.render { id := "x\"y" } = " id=\"x&quot;y\""  -- values still escaped
+
+-- Regression test: a genuinely wrong-typed field still fails cleanly, not
+-- with 1.2's opaque "Application type mismatch ... ?m.7" message -- see
+-- the `Coe` instance's doc comment above for why.
+/--
+error: Type mismatch
+  true
+has type
+  Bool
+but is expected to have type
+  Option String
+-/
+#guard_msgs in
+example := HtmlAttrs.render { id := true }
 
 #guard AAttrs.render { href := "https://example.com" } = " href=\"https://example.com\""
-#guard AAttrs.render { href := "x", target := some "_blank" } = " href=\"x\" target=\"_blank\""
+#guard AAttrs.render { href := "x", target := "_blank" } = " href=\"x\" target=\"_blank\""
 
 #guard ImgAttrs.render { src := "a.png", alt := "desc" } = " src=\"a.png\" alt=\"desc\""
 
 #guard ScriptAttrs.render { src := "/a.js" } = " src=\"/a.js\""
-#guard ScriptAttrs.render { src := "/a.js", integrity := some "sha384-x", crossorigin := some "anonymous" }
+#guard ScriptAttrs.render { src := "/a.js", integrity := "sha384-x", crossorigin := "anonymous" }
   = " src=\"/a.js\" integrity=\"sha384-x\" crossorigin=\"anonymous\""
 
 #guard LinkAttrs.render { rel := "stylesheet", href := "/style.css" }
@@ -137,7 +168,7 @@ def LinkAttrs.render (a : LinkAttrs) : String :=
 #guard InputAttrs.render { disabled := true } = " type=\"text\" disabled"
 #guard InputAttrs.render { disabled := false } = " type=\"text\""  -- explicit: never `disabled="false"`
 #guard InputAttrs.render { checked := true, required := true } = " type=\"text\" checked required"
-#guard InputAttrs.render { name := some "q", value := some "v" } = " type=\"text\" name=\"q\" value=\"v\""
+#guard InputAttrs.render { name := "q", value := "v" } = " type=\"text\" name=\"q\" value=\"v\""
 
 #guard renderBoolAttr "disabled" true = " disabled"
 #guard renderBoolAttr "disabled" false = ""

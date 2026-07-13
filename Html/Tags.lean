@@ -284,7 +284,7 @@ def td (children : List (Node .flow)) (attrs : HtmlAttrs := {})
 #guard Node.render (div [p ["Hello, "], strong ["world"]])
   = "<div><p>Hello, </p><strong>world</strong></div>"
 #guard Node.render (p ["a < b & c"]) = "<p>a &lt; b &amp; c</p>"
-#guard Node.render (div [] { id := some "x", class_ := some "y" })
+#guard Node.render (div [] { id := "x", class_ := "y" })
   = "<div id=\"x\" class=\"y\"></div>"
 #guard Node.render (div [] {} [("data-x", "1")]) = "<div data-x=\"1\"></div>"
 #guard Node.render (div [(Node.unsafeRaw "<b>raw</b>" : Node .flow)])
@@ -322,5 +322,12 @@ example : Node .flow := p [div []]
   = "<div>\n  <pre>line1\n  line2</pre>\n</div>"
 #guard Node.renderPretty (div [(textarea "line1\nline2  spaced" : Node .flow)])
   = "<div>\n  <textarea>line1\nline2  spaced</textarea>\n</div>"
+
+-- `Coe String (Option String)` (Html/Attrs.lean) applies at a real tag call
+-- site too, not just a bare struct literal.
+#guard Node.render (div [] (attrs := { id := "x", class_ := "y" }))
+  = "<div id=\"x\" class=\"y\"></div>"
+#guard Node.render (a (linkAttrs := { href := "/x", target := "_blank" }) [Node.text "go"])
+  = "<a href=\"/x\" target=\"_blank\">go</a>"
 
 end Html

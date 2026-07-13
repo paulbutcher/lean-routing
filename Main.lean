@@ -10,8 +10,8 @@ open Routing
 
 def htmxScript : ScriptAttrs :=
   { src := "https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js"
-    integrity := some "sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V"
-    crossorigin := some "anonymous" }
+    integrity := "sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V"
+    crossorigin := "anonymous" }
 
 def page : String :=
   document
@@ -19,9 +19,9 @@ def page : String :=
       body
         [ h1 ["Hey there ;-)"],
           p ["Served by a ", strong ["typed"], " HTML library." ],
-          Htmx.button ["Ping"] { hxGet := some "/ping", hxTarget := some "#result", hxSwap := some .innerHTML },
-          div [] { id := some "result" } ] ]
-    (pretty := true) (lang := some "en")
+          Htmx.button ["Ping"] { hxGet := "/ping", hxTarget := "#result", hxSwap := some .innerHTML },
+          div [] { id := "result" } ] ]
+    (pretty := true) (lang := "en")
 
 def pingFragment : String :=
   Node.render (strong ["pong"])
@@ -33,7 +33,7 @@ def helloPage (name : String) : String :=
         [ h1 [s!"Hello, {name}!"],
           p [ "This page came from a ", strong ["typed path capture"],
               s!": /hello/:name:String matched \"{name}\"." ] ] ]
-    (pretty := true) (lang := some "en")
+    (pretty := true) (lang := "en")
 
 def routes : List (Route Result) :=
   [ route .get "/" (Response.ok.html page : Result),

@@ -24,6 +24,28 @@ inductive HxSwap where
   | delete
   | none
 
+/-- Same rationale as `Html.instCoeStringOptionString` (`Html/Attrs.lean`):
+lets `{ hxGet := "/x" }` elaborate directly against `Option String` fields
+without `some`. Scoped to `Htmx`, and safe for the same reason -- no shared
+unresolved metavariable between `String` and `Option String` for coercion
+insertion to choke on (see `docs/html-library-plan.md`'s discussion of this
+vs. the unrelated 1.2 friction). -/
+scoped instance : Coe String (Option String) := ⟨some⟩
+
+/-- Same rationale, for `hxBoost : Option Bool`. -/
+scoped instance : Coe Bool (Option Bool) := ⟨some⟩
+
+-- Deliberately **no** `Coe HxSwap (Option HxSwap)`: spiked and rejected.
+-- Leading-dot notation (`hxSwap := .outerHTML`) resolves its identifier
+-- against the *expected* type's namespace directly (here `Option`) and
+-- never falls back to a coercion source's namespace, so the coercion
+-- wouldn't even fire for the common case -- confirmed empirically, `.
+-- outerHTML` fails with "Unknown constant `Option.outerHTML`". Worse, since
+-- `HxSwap` happens to have its own `none` constructor, the one case that
+-- *does* typecheck (`hxSwap := .none`) silently resolves to `Option.none`
+-- (absent) instead of `some HxSwap.none` -- a footgun with no matching
+-- upside. `hxSwap` keeps `some .outerHTML`/`some .none` explicit.
+
 def HxSwap.render : HxSwap → String
   | .innerHTML => "innerHTML"
   | .outerHTML => "outerHTML"
@@ -87,30 +109,33 @@ def HtmxAttrs.toPairs (a : HtmxAttrs) : List (String × String) :=
     (match a.hxBoost with | none => [] | some b => [("hx-boost", if b then "true" else "false")]) ++
     optPair "hx-ext" a.hxExt ++ optPair "hx-params" a.hxParams
 
--- #guard tests, one (or more) per field.
+-- #guard tests, one (or more) per field. Optional `String`/`Bool` fields
+-- are set via the `Coe` instances above, not `some`.
 #guard HtmxAttrs.toPairs {} = []
-#guard HtmxAttrs.toPairs { hxGet := some "/x" } = [("hx-get", "/x")]
-#guard HtmxAttrs.toPairs { hxPost := some "/x" } = [("hx-post", "/x")]
-#guard HtmxAttrs.toPairs { hxPut := some "/x" } = [("hx-put", "/x")]
-#guard HtmxAttrs.toPairs { hxPatch := some "/x" } = [("hx-patch", "/x")]
-#guard HtmxAttrs.toPairs { hxDelete := some "/x" } = [("hx-delete", "/x")]
-#guard HtmxAttrs.toPairs { hxTrigger := some "click" } = [("hx-trigger", "click")]
-#guard HtmxAttrs.toPairs { hxTarget := some "#result" } = [("hx-target", "#result")]
+#guard HtmxAttrs.toPairs { hxGet := "/x" } = [("hx-get", "/x")]
+#guard HtmxAttrs.toPairs { hxPost := "/x" } = [("hx-post", "/x")]
+#guard HtmxAttrs.toPairs { hxPut := "/x" } = [("hx-put", "/x")]
+#guard HtmxAttrs.toPairs { hxPatch := "/x" } = [("hx-patch", "/x")]
+#guard HtmxAttrs.toPairs { hxDelete := "/x" } = [("hx-delete", "/x")]
+#guard HtmxAttrs.toPairs { hxTrigger := "click" } = [("hx-trigger", "click")]
+#guard HtmxAttrs.toPairs { hxTarget := "#result" } = [("hx-target", "#result")]
+-- No `Coe HxSwap (Option HxSwap)` (see that decision's comment above) --
+-- `hxSwap` stays `some`-explicit.
 #guard HtmxAttrs.toPairs { hxSwap := some .outerHTML } = [("hx-swap", "outerHTML")]
 #guard HtmxAttrs.toPairs { hxSwap := some .none } = [("hx-swap", "none")]
-#guard HtmxAttrs.toPairs { hxSwapOob := some "true" } = [("hx-swap-oob", "true")]
-#guard HtmxAttrs.toPairs { hxSelect := some "#x" } = [("hx-select", "#x")]
-#guard HtmxAttrs.toPairs { hxSelectOob := some "#x" } = [("hx-select-oob", "#x")]
-#guard HtmxAttrs.toPairs { hxPushUrl := some "true" } = [("hx-push-url", "true")]
-#guard HtmxAttrs.toPairs { hxConfirm := some "Sure?" } = [("hx-confirm", "Sure?")]
-#guard HtmxAttrs.toPairs { hxIndicator := some "#spinner" } = [("hx-indicator", "#spinner")]
-#guard HtmxAttrs.toPairs { hxVals := some "{\"x\":1}" } = [("hx-vals", "{\"x\":1}")]
-#guard HtmxAttrs.toPairs { hxBoost := some true } = [("hx-boost", "true")]
-#guard HtmxAttrs.toPairs { hxBoost := some false } = [("hx-boost", "false")]  -- explicit, not omitted
-#guard HtmxAttrs.toPairs { hxExt := some "json-enc" } = [("hx-ext", "json-enc")]
-#guard HtmxAttrs.toPairs { hxParams := some "*" } = [("hx-params", "*")]
+#guard HtmxAttrs.toPairs { hxSwapOob := "true" } = [("hx-swap-oob", "true")]
+#guard HtmxAttrs.toPairs { hxSelect := "#x" } = [("hx-select", "#x")]
+#guard HtmxAttrs.toPairs { hxSelectOob := "#x" } = [("hx-select-oob", "#x")]
+#guard HtmxAttrs.toPairs { hxPushUrl := "true" } = [("hx-push-url", "true")]
+#guard HtmxAttrs.toPairs { hxConfirm := "Sure?" } = [("hx-confirm", "Sure?")]
+#guard HtmxAttrs.toPairs { hxIndicator := "#spinner" } = [("hx-indicator", "#spinner")]
+#guard HtmxAttrs.toPairs { hxVals := "{\"x\":1}" } = [("hx-vals", "{\"x\":1}")]
+#guard HtmxAttrs.toPairs { hxBoost := true } = [("hx-boost", "true")]
+#guard HtmxAttrs.toPairs { hxBoost := false } = [("hx-boost", "false")]  -- explicit, not omitted
+#guard HtmxAttrs.toPairs { hxExt := "json-enc" } = [("hx-ext", "json-enc")]
+#guard HtmxAttrs.toPairs { hxParams := "*" } = [("hx-params", "*")]
 
-#guard HtmxAttrs.toPairs { hxGet := some "/x", hxTarget := some "#y", hxSwap := some .innerHTML }
+#guard HtmxAttrs.toPairs { hxGet := "/x", hxTarget := "#y", hxSwap := some .innerHTML }
   = [("hx-get", "/x"), ("hx-target", "#y"), ("hx-swap", "innerHTML")]
 
 end Htmx

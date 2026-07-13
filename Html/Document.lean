@@ -35,7 +35,7 @@ def document (children : List (Node .flow))
 
 #guard document [head [], body []]
   = "<!DOCTYPE html><html><head></head><body></body></html>"
-#guard document [head [], body []] (lang := some "en")
+#guard document [head [], body []] (lang := "en")
   = "<!DOCTYPE html><html lang=\"en\"><head></head><body></body></html>"
 #guard document [head [], body [p [Node.text "hi"]]]
   = "<!DOCTYPE html><html><head></head><body><p>hi</p></body></html>"
@@ -55,7 +55,7 @@ def document (children : List (Node .flow))
   = "<!DOCTYPE html><html><head><title>T</title>" ++
     "<script src=\"/a.js\"></script></head><body></body></html>"
 #guard document
-    [head [title "T", script { src := "/a.js", integrity := some "sha384-x", crossorigin := some "anonymous" }],
+    [head [title "T", script { src := "/a.js", integrity := "sha384-x", crossorigin := "anonymous" }],
      body []]
   = "<!DOCTYPE html><html><head><title>T</title>" ++
     "<script src=\"/a.js\" integrity=\"sha384-x\" crossorigin=\"anonymous\"></script></head><body></body></html>"
