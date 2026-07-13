@@ -13,76 +13,58 @@ piece that turns rendered content into a servable document. See
 
 namespace Html
 
-/-- Assembles `<!DOCTYPE html>` plus the `<html>`/`<head>`/`<body>`
-skeleton into one entry point. This is the only place `html`, `head`,
-`body`, `meta`, `title`, `link` are used -- per Phase 0's category-lattice
-decision, they are a special case of the document skeleton, not
-general-purpose reusable tags (`Html/Tags.lean` deliberately doesn't
-define them). Built entirely from `Node`'s public `element`/`voidElement`/
-`textElement` (no access to `Node`'s private constructor needed), so
-`body`'s content -- potentially large, unlike `head`'s -- is threaded
-through `Node.element` rather than hand-concatenated, staying immune to
-the quadratic-prepend trap documented in Phase 0/1.
-
-Always emits `<meta charset="utf-8">` (a near-universal default); `meta`
-supplies additional `name`/`content` pairs (e.g. `viewport`,
-`description`), `stylesheets` supplies `<link rel="stylesheet">` `href`s,
-and `scripts` supplies `<script src="...">` tags (e.g. a CDN-hosted
-library) -- unlike `link`, `script` isn't a void element, so it's built
-via `Node.element` with no children rather than `Node.voidElement`.
+/-- Prepends `<!DOCTYPE html>` and wraps `children` in a single `<html>`
+element -- the only tag `document` builds itself. `head`, `body`, `title`,
+`meta`, `link`, `script` are ordinary tags (`Html/Tags.lean`); callers
+build those themselves and pass the results in as `children` (typically
+`[head [...], body [...]]`) -- `document` doesn't inject a charset `meta`,
+a `title`, or anything else on their behalf.
 
 `pretty` selects indented (`Node.renderPretty`) vs. compact (`Node.render`)
 output -- Phase 6; `unit` is the string repeated per indentation level
 (default two spaces) and is ignored when `pretty` is `false`. Pretty output
 is for debugging/reading generated markup, not size-sensitive serving. -/
-def document (title : String) (body : List (Node .flow))
-    (metaTags : List (String × String) := []) (stylesheets : List String := [])
-    (scripts : List ScriptAttrs := [])
+def document (children : List (Node .flow))
     (lang : Option String := none) (pretty : Bool := false) (unit : String := "  ") : String :=
-  let charsetNode : Node .flow := Node.voidElement .flow "meta" (renderAttr "charset" "utf-8")
-  let metaNodes : List (Node .flow) :=
-    metaTags.map (fun (name, content) =>
-      Node.voidElement .flow "meta" (renderAttr "name" name ++ renderAttr "content" content))
-  let linkNodes : List (Node .flow) :=
-    stylesheets.map (fun href =>
-      Node.voidElement .flow "link" (renderAttr "rel" "stylesheet" ++ renderAttr "href" href))
-  let scriptNodes : List (Node .flow) :=
-    scripts.map (fun s => Node.element .flow "script" [] s.render)
-  let titleNode : Node .flow := Node.textElement .flow "title" title
-  let headNode : Node .flow :=
-    Node.element .flow "head" ([charsetNode, titleNode] ++ metaNodes ++ linkNodes ++ scriptNodes)
-  let bodyNode : Node .flow := Node.element .flow "body" body
-  let htmlAttrsStr := match lang with
+  let attrsStr := match lang with
     | some l => renderAttr "lang" l
     | none => ""
-  let htmlNode : Node .flow := Node.element .flow "html" [headNode, bodyNode] htmlAttrsStr
+  let htmlNode : Node .flow := Node.element .flow "html" children attrsStr
   if pretty then "<!DOCTYPE html>\n" ++ Node.renderPretty htmlNode unit
   else "<!DOCTYPE html>" ++ Node.render htmlNode
 
-#guard document "T" [] = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>T</title></head><body></body></html>"
-#guard document "T" [] (lang := some "en")
-  = "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>T</title></head><body></body></html>"
-#guard document "T" [p [Node.text "hi"]]
-  = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>T</title></head><body><p>hi</p></body></html>"
-#guard document "T" [] [("viewport", "width=device-width")]
-  = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>T</title>" ++
+#guard document [head [], body []]
+  = "<!DOCTYPE html><html><head></head><body></body></html>"
+#guard document [head [], body []] (lang := some "en")
+  = "<!DOCTYPE html><html lang=\"en\"><head></head><body></body></html>"
+#guard document [head [], body [p [Node.text "hi"]]]
+  = "<!DOCTYPE html><html><head></head><body><p>hi</p></body></html>"
+#guard document [head [title "T"], body []]
+  = "<!DOCTYPE html><html><head><title>T</title></head><body></body></html>"
+#guard document [head [meta_ [("charset", "utf-8")], title "T"], body []]
+  = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>T</title></head><body></body></html>"
+#guard document [head [title "T", meta_ [("name", "viewport"), ("content", "width=device-width")]], body []]
+  = "<!DOCTYPE html><html><head><title>T</title>" ++
     "<meta name=\"viewport\" content=\"width=device-width\"></head><body></body></html>"
-#guard document "T" [] [] ["/style.css"]
-  = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>T</title>" ++
+#guard document [head [title "T", link { rel := "stylesheet", href := "/style.css" }], body []]
+  = "<!DOCTYPE html><html><head><title>T</title>" ++
     "<link rel=\"stylesheet\" href=\"/style.css\"></head><body></body></html>"
-#guard document "<script>" [] = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>&lt;script&gt;</title></head><body></body></html>"
-#guard document "T" [] [] [] [{ src := "/a.js" }]
-  = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>T</title>" ++
+#guard document [head [title "<script>"], body []]
+  = "<!DOCTYPE html><html><head><title>&lt;script&gt;</title></head><body></body></html>"
+#guard document [head [title "T", script { src := "/a.js" }], body []]
+  = "<!DOCTYPE html><html><head><title>T</title>" ++
     "<script src=\"/a.js\"></script></head><body></body></html>"
-#guard document "T" [] [] [] [{ src := "/a.js", integrity := some "sha384-x", crossorigin := some "anonymous" }]
-  = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>T</title>" ++
+#guard document
+    [head [title "T", script { src := "/a.js", integrity := some "sha384-x", crossorigin := some "anonymous" }],
+     body []]
+  = "<!DOCTYPE html><html><head><title>T</title>" ++
     "<script src=\"/a.js\" integrity=\"sha384-x\" crossorigin=\"anonymous\"></script></head><body></body></html>"
 
-#guard document "T" [] (pretty := true)
-  = "<!DOCTYPE html>\n<html>\n  <head>\n    <meta charset=\"utf-8\">\n    <title>T</title>\n  </head>\n  <body></body>\n</html>"
-#guard document "T" [p [Node.text "hi"]] (pretty := true)
-  = "<!DOCTYPE html>\n<html>\n  <head>\n    <meta charset=\"utf-8\">\n    <title>T</title>\n  </head>\n  <body>\n    <p>hi</p>\n  </body>\n</html>"
-#guard document "T" [] (pretty := true) (unit := "    ")
-  = "<!DOCTYPE html>\n<html>\n    <head>\n        <meta charset=\"utf-8\">\n        <title>T</title>\n    </head>\n    <body></body>\n</html>"
+#guard document [head [], body []] (pretty := true)
+  = "<!DOCTYPE html>\n<html>\n  <head></head>\n  <body></body>\n</html>"
+#guard document [head [title "T"], body [p [Node.text "hi"]]] (pretty := true)
+  = "<!DOCTYPE html>\n<html>\n  <head>\n    <title>T</title>\n  </head>\n  <body>\n    <p>hi</p>\n  </body>\n</html>"
+#guard document [head [], body []] (pretty := true) (unit := "    ")
+  = "<!DOCTYPE html>\n<html>\n    <head></head>\n    <body></body>\n</html>"
 
 end Html

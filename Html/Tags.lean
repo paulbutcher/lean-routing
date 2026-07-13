@@ -9,10 +9,12 @@ Named tag functions, built on `Html/Node.lean`'s constructor shapes and
 
 Scope notes (documented here rather than left as silent gaps):
 
-- `html`, `head`, `body`, `meta`, `link` are **not** defined here -- per
-  Phase 0's Category-lattice decision, they're handled as a special case
-  of Phase 5's document skeleton (`Html.document`), not as general-purpose
-  reusable tags.
+- `html` is **not** defined here -- it's inseparable from the
+  `<!DOCTYPE html>` prefix that makes it a document at all, so it stays
+  `Html.document`'s sole responsibility rather than a general-purpose tag.
+  `head`, `body`, `title`, `meta`, `link`, `script` *are* ordinary tags
+  (below): `Html.document` no longer builds them itself -- callers compose
+  them and pass the results in as `document`'s children.
 - Only `AAttrs`, `ImgAttrs`, `InputAttrs` (Phase 3) get dedicated typed
   attribute records. Every other tag below takes plain `HtmlAttrs` (global
   attributes only) plus `rawAttrs` -- element-specific attributes beyond
@@ -39,7 +41,7 @@ def div (children : List (Node .flow)) (attrs : HtmlAttrs := {})
     (rawAttrs : List (String × String) := []) : Node .flow :=
   Node.element .flow "div" children (combineAttrs "" attrs rawAttrs)
 
-def «section» (children : List (Node .flow)) (attrs : HtmlAttrs := {})
+def section_ (children : List (Node .flow)) (attrs : HtmlAttrs := {})
     (rawAttrs : List (String × String) := []) : Node .flow :=
   Node.element .flow "section" children (combineAttrs "" attrs rawAttrs)
 
@@ -58,6 +60,41 @@ def footer (children : List (Node .flow)) (attrs : HtmlAttrs := {})
 def nav (children : List (Node .flow)) (attrs : HtmlAttrs := {})
     (rawAttrs : List (String × String) := []) : Node .flow :=
   Node.element .flow "nav" children (combineAttrs "" attrs rawAttrs)
+
+-- Document metadata/structure: ordinary flow-content tags, but only ever
+-- meaningful as `Html.document`'s children (directly, or nested inside a
+-- `head`/`body` of its children) -- `document` itself no longer builds
+-- any of these (see module-doc scope note).
+def head (children : List (Node .flow)) (attrs : HtmlAttrs := {})
+    (rawAttrs : List (String × String) := []) : Node .flow :=
+  Node.element .flow "head" children (combineAttrs "" attrs rawAttrs)
+
+def body (children : List (Node .flow)) (attrs : HtmlAttrs := {})
+    (rawAttrs : List (String × String) := []) : Node .flow :=
+  Node.element .flow "body" children (combineAttrs "" attrs rawAttrs)
+
+def title (content : String) (attrs : HtmlAttrs := {})
+    (rawAttrs : List (String × String) := []) : Node .flow :=
+  Node.textElement .flow "title" content (combineAttrs "" attrs rawAttrs)
+
+/-- Void; takes `rawAttrs` as its primary content rather than a typed
+attrs record, since a meta tag's shape varies by purpose --
+`[("charset", "utf-8")]`, `[("name", "viewport"), ("content", "...")]`,
+`[("http-equiv", "..."), ("content", "...")]`, ... -- with no one shape
+common enough to single out as required fields (unlike `link`/`script`
+below, which are always `rel`+`href`/`src`). -/
+def meta_ (rawAttrs : List (String × String)) (attrs : HtmlAttrs := {}) : Node .flow :=
+  Node.voidElement .flow "meta" (combineAttrs "" attrs rawAttrs)
+
+def link (linkAttrs : LinkAttrs) (attrs : HtmlAttrs := {})
+    (rawAttrs : List (String × String) := []) : Node .flow :=
+  Node.voidElement .flow "link" (combineAttrs (LinkAttrs.render linkAttrs) attrs rawAttrs)
+
+-- Not a void element (unlike `link`): `<script src="...">` still needs a
+-- closing tag.
+def script (scriptAttrs : ScriptAttrs) (attrs : HtmlAttrs := {})
+    (rawAttrs : List (String × String) := []) : Node .flow :=
+  Node.element .flow "script" [] (combineAttrs (ScriptAttrs.render scriptAttrs) attrs rawAttrs)
 
 -- Text: flow content, phrasing-only children (a `<div>` inside these is a
 -- type error, not just an HTML validity error).
@@ -203,7 +240,7 @@ def td (children : List (Node .flow)) (attrs : HtmlAttrs := {})
 
 -- #guard smoke test per tag: minimal render output, no attrs.
 #guard Node.render (div []) = "<div></div>"
-#guard Node.render («section» []) = "<section></section>"
+#guard Node.render (section_ []) = "<section></section>"
 #guard Node.render (article []) = "<article></article>"
 #guard Node.render (header []) = "<header></header>"
 #guard Node.render (footer []) = "<footer></footer>"

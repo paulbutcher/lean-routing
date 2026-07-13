@@ -14,23 +14,26 @@ def htmxScript : ScriptAttrs :=
     crossorigin := some "anonymous" }
 
 def page : String :=
-  document (pretty := true) "Hey there ;-)"
-    [ h1 ["Hey there ;-)"],
-      p ["Served by a ", strong ["typed"], " HTML library." ],
-      Htmx.button ["Ping"] { hxGet := some "/ping", hxTarget := some "#result", hxSwap := some .innerHTML },
-      div [] { id := some "result" } ]
-    (scripts := [htmxScript])
-    (lang := some "en")
+  document
+    [ head [ meta_ [("charset", "utf-8")], title "Hey there ;-)", script htmxScript ],
+      body
+        [ h1 ["Hey there ;-)"],
+          p ["Served by a ", strong ["typed"], " HTML library." ],
+          Htmx.button ["Ping"] { hxGet := some "/ping", hxTarget := some "#result", hxSwap := some .innerHTML },
+          div [] { id := some "result" } ] ]
+    (pretty := true) (lang := some "en")
 
 def pingFragment : String :=
   Node.render (strong ["pong"])
 
 def helloPage (name : String) : String :=
-  document (pretty := true) s!"Hello, {name}"
-    [ h1 [s!"Hello, {name}!"],
-      p [ "This page came from a ", strong ["typed path capture"],
-          s!": /hello/:name:String matched \"{name}\"." ] ]
-    (lang := some "en")
+  document
+    [ head [ meta_ [("charset", "utf-8")], title s!"Hello, {name}" ],
+      body
+        [ h1 [s!"Hello, {name}!"],
+          p [ "This page came from a ", strong ["typed path capture"],
+              s!": /hello/:name:String matched \"{name}\"." ] ] ]
+    (pretty := true) (lang := some "en")
 
 def routes : List (Route Result) :=
   [ route .get "/" (Response.ok.html page : Result),

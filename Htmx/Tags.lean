@@ -23,9 +23,9 @@ def div (children : List (Html.Node .flow)) (hx : HtmxAttrs := {}) (attrs : Html
     (rawAttrs : List (String × String) := []) : Html.Node .flow :=
   Html.div children attrs (hx.toPairs ++ rawAttrs)
 
-def «section» (children : List (Html.Node .flow)) (hx : HtmxAttrs := {}) (attrs : Html.HtmlAttrs := {})
+def section_ (children : List (Html.Node .flow)) (hx : HtmxAttrs := {}) (attrs : Html.HtmlAttrs := {})
     (rawAttrs : List (String × String) := []) : Html.Node .flow :=
-  Html.section children attrs (hx.toPairs ++ rawAttrs)
+  Html.section_ children attrs (hx.toPairs ++ rawAttrs)
 
 def article (children : List (Html.Node .flow)) (hx : HtmxAttrs := {}) (attrs : Html.HtmlAttrs := {})
     (rawAttrs : List (String × String) := []) : Html.Node .flow :=

@@ -87,11 +87,11 @@ def InputAttrs.render (a : InputAttrs) : String :=
     renderBoolAttr "readonly" a.readonly
 
 /-- Typed attributes for an external `<script src="...">` tag (used by
-`Html.document`'s `scripts` parameter, e.g. for loading a library from a
-CDN). `integrity`/`crossorigin` carry Subresource Integrity metadata --
-load-bearing for a CDN-hosted script (it's what lets the browser refuse a
-tampered file instead of silently running it), not decorative, so they're
-modeled explicitly here rather than left to the `rawAttrs` escape hatch. -/
+`Html.script`, e.g. for loading a library from a CDN). `integrity`/
+`crossorigin` carry Subresource Integrity metadata -- load-bearing for a
+CDN-hosted script (it's what lets the browser refuse a tampered file
+instead of silently running it), not decorative, so they're modeled
+explicitly here rather than left to the `rawAttrs` escape hatch. -/
 structure ScriptAttrs where
   src : String
   integrity : Option String := none
@@ -99,6 +99,16 @@ structure ScriptAttrs where
 
 def ScriptAttrs.render (a : ScriptAttrs) : String :=
   renderAttr "src" a.src ++ renderOpt "integrity" a.integrity ++ renderOpt "crossorigin" a.crossorigin
+
+/-- Typed attributes for `<link>`. `rel` and `href` are both required --
+a `<link>` with neither states nothing (most commonly `rel="stylesheet"`,
+but also `rel="icon"`, `rel="preload"`, ...). -/
+structure LinkAttrs where
+  rel : String
+  href : String
+
+def LinkAttrs.render (a : LinkAttrs) : String :=
+  renderAttr "rel" a.rel ++ renderAttr "href" a.href
 
 -- #guard tests, one (or more) per attribute.
 #guard HtmlAttrs.render {} = ""
@@ -119,6 +129,9 @@ def ScriptAttrs.render (a : ScriptAttrs) : String :=
 #guard ScriptAttrs.render { src := "/a.js" } = " src=\"/a.js\""
 #guard ScriptAttrs.render { src := "/a.js", integrity := some "sha384-x", crossorigin := some "anonymous" }
   = " src=\"/a.js\" integrity=\"sha384-x\" crossorigin=\"anonymous\""
+
+#guard LinkAttrs.render { rel := "stylesheet", href := "/style.css" }
+  = " rel=\"stylesheet\" href=\"/style.css\""
 
 #guard InputAttrs.render {} = " type=\"text\""
 #guard InputAttrs.render { disabled := true } = " type=\"text\" disabled"
