@@ -9,10 +9,6 @@ open Std Http Server
 open Html
 open Routing
 
-/-- htmx sends the browser's current page URL (not the target of the AJAX request itself) as this
-header on every request it triggers, which is how a mutation handler below knows whether the
-client is looking at `/`, `/active`, or `/completed` without any query-string routing or
-client-side state -- see `docs/todo-app-plan.md`. -/
 def hxCurrentUrlHeader : Header.Name := { value := "hx-current-url" }
 
 /-- The filter a mutation response should render, recovered from `HX-Current-URL`; defaults to
@@ -102,6 +98,7 @@ def routes (db : SQLite) : List (Route Result) :=
 def main : IO Unit := Async.block do
   let db ← SQLite.open ":memory:"
   Todo.initSchema db
-  let addr : Net.SocketAddress := .v4 ⟨.ofParts 127 0 0 1, 2000⟩
-  let server ← Server.serve addr (toHandler (routes db))
+  let addr := .v4 ⟨.ofParts 127 0 0 1, 2000⟩
+  let handler := toHandler (routes db)
+  let server <- serve addr handler
   server.waitShutdown
