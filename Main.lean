@@ -26,7 +26,7 @@ def renderMutation (db : SQLite) (req : Request Body.Stream) : ContextAsync (Res
   | none => .all
   render db currentFilter Todo.mutationFragment
 
-def pageHandler (db : SQLite) (filter : Todo.Filter) (_req : Request Body.Stream) : ContextAsync (Response Body.Any) :=
+def pageHandler (filter : Todo.Filter) (db : SQLite) (_req : Request Body.Stream) : ContextAsync (Response Body.Any) :=
   render db filter Todo.page
 
 def addHandler (db : SQLite) (req : Request Body.Stream) : ContextAsync (Response Body.Any) := do
@@ -69,16 +69,16 @@ def clearCompletedHandler (db : SQLite) (req : Request Body.Stream) :
   renderMutation db req
 
 def routes (db : SQLite) : List (Route Result) :=
-  [ .get "/" (pageHandler db .all),
-    .get "/active" (pageHandler db .active),
-    .get "/completed" (pageHandler db .completed),
-    .post "/todos" (addHandler db),
-    .get "/todos/:id:Nat/edit" (editHandler db),
-    .put "/todos/:id:Nat" (saveHandler db),
-    .post "/todos/:id:Nat/toggle" (toggleHandler db),
-    .delete "/todos/:id:Nat" (deleteHandler db),
-    .post "/todos/toggle-all" (toggleAllHandler db),
-    .delete "/todos/completed" (clearCompletedHandler db) ]
+  [ .get "/" ∘ pageHandler .all,
+    .get "/active" ∘ pageHandler .active,
+    .get "/completed" ∘ pageHandler .completed,
+    .post "/todos" ∘ addHandler,
+    .get "/todos/:id:Nat/edit" ∘ editHandler,
+    .put "/todos/:id:Nat" ∘ saveHandler,
+    .post "/todos/:id:Nat/toggle" ∘ toggleHandler,
+    .delete "/todos/:id:Nat" ∘ deleteHandler,
+    .post "/todos/toggle-all" ∘ toggleAllHandler,
+    .delete "/todos/completed" ∘ clearCompletedHandler ].map (· db)
 
 def main : IO Unit := Async.block do
   let db ← SQLite.open ":memory:"
