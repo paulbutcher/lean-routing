@@ -1,44 +1,107 @@
 import Std.Http.Server
+import SQLite
 import Html
-import Htmx
 import Routing
+import Todo
 
 open Std Async
 open Std Http Server
 open Html
 open Routing
 
-def htmxScript : ScriptAttrs :=
-  { src := "https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js"
-    integrity := "sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V"
-    crossorigin := "anonymous" }
+/-- htmx sends the browser's current page URL (not the target of the AJAX request itself) as this
+header on every request it triggers, which is how a mutation handler below knows whether the
+client is looking at `/`, `/active`, or `/completed` without any query-string routing or
+client-side state -- see `docs/todo-app-plan.md`. -/
+def hxCurrentUrlHeader : Header.Name := { value := "hx-current-url" }
 
-def page : String :=
-  document (pretty := true) (lang := "en")
-    [ head [ meta_ [("charset", "utf-8")], title "Hey there ;-)", script htmxScript ],
-      body
-        [ h1 ["Hey there ;-)"],
-          p ["Served by a ", strong ["typed"], " HTML library." ],
-          Htmx.button ["Ping"] { hxGet := "/ping", hxTarget := "#result", hxSwap := some .innerHTML },
-          div [] { id := "result" } ] ]
+/-- The filter a mutation response should render, recovered from `HX-Current-URL`; defaults to
+`.all` if the header is absent (a non-htmx request, e.g. a bare `curl`). -/
+def currentFilter (req : Request Body.Stream) : Todo.Filter :=
+  match req.line.headers.get? hxCurrentUrlHeader with
+  | some v => Todo.filterFromPath v.value
+  | none => .all
 
-def pingFragment : String :=
-  Node.render (strong ["pong"])
+/-- Full page response for one of the three filter routes. -/
+def pageResponse (db : SQLite) (filter : Todo.Filter) : ContextAsync (Response Body.Any) := do
+  let items ← Todo.list db filter
+  Response.ok.html (Todo.page filter items)
 
-def helloPage (name : String) : String :=
-  document (pretty := true) (lang := "en")
-    [ head [ meta_ [("charset", "utf-8")], title s!"Hello, {name}" ],
-      body
-        [ h1 [s!"Hello, {name}!"],
-          p [ "This page came from a ", strong ["typed path capture"],
-              s!": /hello/:name:String matched \"{name}\"." ] ] ]
+/-- Shared response for every mutating route: re-renders `#todo-list-section` plus the
+out-of-band footer for whichever filter the client is currently looking at. -/
+def mutationResponse (db : SQLite) (filter : Todo.Filter) : ContextAsync (Response Body.Any) := do
+  let items ← Todo.list db filter
+  Response.ok.html (Todo.mutationFragment items filter)
 
-def routes : List (Route Result) :=
-  [ route .get "/" (Response.ok.html page : Result),
-    route .get "/ping" (Response.ok.html pingFragment : Result),
-    route .get "/hello/:name:String" (fun (name : String) => (Response.ok.html (helloPage name) : Result)) ]
+/-- Reads and decodes a `application/x-www-form-urlencoded` request body, returning the value of
+`name`, or `""` if the body has no such field. -/
+def formField (req : Request Body.Stream) (name : String) : Async String := do
+  let body ← req.body.readAll (α := String)
+  return ((parseFormBody body).lookup name).getD ""
+
+def homeHandler (db : SQLite) (_req : Request Body.Stream) : ContextAsync (Response Body.Any) :=
+  pageResponse db .all
+
+def activeHandler (db : SQLite) (_req : Request Body.Stream) : ContextAsync (Response Body.Any) :=
+  pageResponse db .active
+
+def completedHandler (db : SQLite) (_req : Request Body.Stream) : ContextAsync (Response Body.Any) :=
+  pageResponse db .completed
+
+def addHandler (db : SQLite) (req : Request Body.Stream) : ContextAsync (Response Body.Any) := do
+  let title ← formField req "title"
+  Todo.add db title
+  mutationResponse db (currentFilter req)
+
+/-- Swaps one todo's `<li>` into edit mode. Not a mutation (nothing in the DB changes), so unlike
+every other route below it targets and returns just that one item, not the whole list section. -/
+def editHandler (db : SQLite) (id : Nat) (_req : Request Body.Stream) :
+    ContextAsync (Response Body.Any) := do
+  let items ← Todo.list db .all
+  match items.find? (fun item => item.id == Int64.ofNat id) with
+  | some item => Response.ok.html (Node.render (Todo.itemEditView item))
+  | none => Response.notFound.text "Not Found"
+
+def saveHandler (db : SQLite) (id : Nat) (req : Request Body.Stream) :
+    ContextAsync (Response Body.Any) := do
+  let title ← formField req "title"
+  Todo.setTitle db (Int64.ofNat id) title
+  mutationResponse db (currentFilter req)
+
+def toggleHandler (db : SQLite) (id : Nat) (req : Request Body.Stream) :
+    ContextAsync (Response Body.Any) := do
+  Todo.toggle db (Int64.ofNat id)
+  mutationResponse db (currentFilter req)
+
+def deleteHandler (db : SQLite) (id : Nat) (req : Request Body.Stream) :
+    ContextAsync (Response Body.Any) := do
+  Todo.delete db (Int64.ofNat id)
+  mutationResponse db (currentFilter req)
+
+def toggleAllHandler (db : SQLite) (req : Request Body.Stream) : ContextAsync (Response Body.Any) := do
+  Todo.toggleAll db
+  mutationResponse db (currentFilter req)
+
+def clearCompletedHandler (db : SQLite) (req : Request Body.Stream) :
+    ContextAsync (Response Body.Any) := do
+  Todo.clearCompleted db
+  mutationResponse db (currentFilter req)
+
+def routes (db : SQLite) : List (Route Result) :=
+  [ route .get "/" (homeHandler db),
+    route .get "/active" (activeHandler db),
+    route .get "/completed" (completedHandler db),
+    route .post "/todos" (addHandler db),
+    route .get "/todos/:id:Nat/edit" (editHandler db),
+    route .put "/todos/:id:Nat" (saveHandler db),
+    route .post "/todos/:id:Nat/toggle" (toggleHandler db),
+    route .delete "/todos/:id:Nat" (deleteHandler db),
+    route .post "/todos/toggle-all" (toggleAllHandler db),
+    route .delete "/todos/completed" (clearCompletedHandler db) ]
 
 def main : IO Unit := Async.block do
+  let db ← SQLite.open ":memory:"
+  Todo.initSchema db
   let addr : Net.SocketAddress := .v4 ⟨.ofParts 127 0 0 1, 2000⟩
-  let server ← Server.serve addr (toHandler routes)
+  let server ← Server.serve addr (toHandler (routes db))
   server.waitShutdown

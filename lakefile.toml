@@ -1,6 +1,11 @@
 name = "webapp"
 version = "0.1.0"
-defaultTargets = ["webapp", "Html", "Htmx", "Routing"]
+defaultTargets = ["webapp", "Html", "Htmx", "Routing", "Todo"]
+
+[[require]]
+name = "leansqlite"
+git = "https://github.com/leanprover/leansqlite"
+rev = "v4.31.0"
 
 [[lean_lib]]
 name = "Html"
@@ -10,6 +15,9 @@ name = "Htmx"
 
 [[lean_lib]]
 name = "Routing"
+
+[[lean_lib]]
+name = "Todo"
 
 [[lean_exe]]
 name = "webapp"
