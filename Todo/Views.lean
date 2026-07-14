@@ -114,13 +114,15 @@ clear-completed button shown only when there's something to clear. Takes `allIte
 regardless of `filter` -- since the count and clear-completed button must reflect the whole list
 even while viewing just the active or just the completed ones. `hxSwapOob := "true"` is what lets
 every mutation's response update this alongside its primary `#todo-list-section` swap in one round
-trip. -/
+trip. The count's `margin: 0` override cancels the browser default `<p>` margin, which the TodoMVC
+stylesheet (built for a bare `<span>`) never resets -- without it, the floated count sits visibly
+lower than the filter links and clear-completed button beside it. -/
 def footerFragment (allItems : Array Item) (filter : Filter) : Node .flow :=
   let activeCount := (allItems.filter (!·.completed)).size
   let completedCount := allItems.size - activeCount
   let countLabel := if activeCount == 1 then "1 item left" else s!"{activeCount} items left"
   Htmx.footer
-    ([ p [countLabel] (attrs := { class_ := "todo-count" }),
+    ([ p [countLabel] (attrs := { class_ := "todo-count", style := "margin: 0" }),
        ul [ filterLink filter .all "All", filterLink filter .active "Active",
             filterLink filter .completed "Completed" ]
          (attrs := { class_ := "filters" }) ]
