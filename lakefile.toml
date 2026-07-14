@@ -1,6 +1,7 @@
 name = "webapp"
 version = "0.1.0"
 defaultTargets = ["webapp", "Html", "Htmx", "Routing", "Forms", "Todo"]
+testDriver = "TodoTests"
 
 [[require]]
 name = "leansqlite"
@@ -21,6 +22,9 @@ name = "Forms"
 
 [[lean_lib]]
 name = "Todo"
+
+[[lean_lib]]
+name = "TodoTests"
 
 [[lean_exe]]
 name = "webapp"
