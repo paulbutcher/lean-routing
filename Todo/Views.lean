@@ -1,6 +1,7 @@
 import Html
 import Htmx
 import Todo.Db
+import Todo.Links
 
 /-!
 `Html`/`Htmx`-built fragments for the todo app: the full page shell, the swappable
@@ -39,9 +40,9 @@ htmx's `HX-Current-URL` request header sends the whole current-page URL, not jus
 raw value straight in) denotes, defaulting to `.all` for anything that doesn't end in `/active` or
 `/completed`. -/
 def Filter.path : Filter → String
-  | .all => "/"
-  | .active => "/active"
-  | .completed => "/completed"
+  | .all => links.index
+  | .active => links.active
+  | .completed => links.completed
 
 def filterFromPath (path : String) : Filter :=
   if path.endsWith "/active" then .active
@@ -54,17 +55,18 @@ back against `#todo-list-section` (see `listSection`) so the shared `mutationFra
 handles every one of them uniformly. -/
 def itemView (item : Item) : Node .flow :=
   let itemId := s!"todo-{item.id}"
+  let id := item.id.toInt.toNat
   li
     [ div
         [ Htmx.input
             { type := "checkbox", checked := item.completed }
-            (hx := { hxPost := s!"/todos/{item.id}/toggle", hxTarget := "#todo-list-section",
+            (hx := { hxPost := links.toggle id, hxTarget := "#todo-list-section",
                      hxSwap := some .outerHTML })
             (attrs := { class_ := "toggle" }),
           Htmx.label [item.title]
-            (hx := { hxGet := s!"/todos/{item.id}/edit", hxTrigger := "dblclick",
+            (hx := { hxGet := links.edit id, hxTrigger := "dblclick",
                      hxTarget := s!"#{itemId}", hxSwap := some .outerHTML }),
-          Htmx.button [] (hx := { hxDelete := s!"/todos/{item.id}", hxTarget := "#todo-list-section",
+          Htmx.button [] (hx := { hxDelete := links.todo id, hxTarget := "#todo-list-section",
                                    hxSwap := some .outerHTML })
             (attrs := { class_ := "destroy" }) ]
         (attrs := { class_ := "view" }) ]
@@ -80,7 +82,7 @@ def itemEditView (item : Item) : Node .flow :=
   li
     [ Htmx.input
         { type := "text", name := "title", value := item.title }
-        (hx := { hxPut := s!"/todos/{item.id}", hxTrigger := "blur, keyup[key=='Enter']",
+        (hx := { hxPut := links.todo item.id.toInt.toNat, hxTrigger := "blur, keyup[key=='Enter']",
                  hxTarget := "#todo-list-section", hxSwap := some .outerHTML })
         (attrs := { class_ := "edit" })
         (rawAttrs := [("autofocus", "autofocus")]) ]
@@ -94,7 +96,7 @@ def listSection (items : Array Item) : Node .flow :=
   section_
     [ Htmx.input
         { type := "checkbox", checked := allCompleted }
-        (hx := { hxPost := "/todos/toggle-all", hxTarget := "#todo-list-section",
+        (hx := { hxPost := links.toggleAll, hxTarget := "#todo-list-section",
                  hxSwap := some .outerHTML })
         (attrs := { id := "toggle-all", class_ := "toggle-all" }),
       label [] (attrs := {}) (rawAttrs := [("for", "toggle-all")]),
@@ -127,7 +129,7 @@ def footerFragment (allItems : Array Item) (filter : Filter) : Node .flow :=
          (attrs := { class_ := "filters" }) ]
       ++ if completedCount > 0 then
            [ (Htmx.button ["Clear completed"]
-               (hx := { hxDelete := "/todos/completed", hxTarget := "#todo-list-section",
+               (hx := { hxDelete := links.clearCompleted, hxTarget := "#todo-list-section",
                         hxSwap := some .outerHTML })
                (attrs := { class_ := "clear-completed" }) : Node .flow) ]
          else [])
@@ -213,7 +215,7 @@ def page (items allItems : Array Item) (filter : Filter) : String :=
                         { name := "title", placeholder := "What needs to be done?" }
                         (attrs := { class_ := "new-todo" })
                         (rawAttrs := [("autofocus", "autofocus")]) ]
-                    (hx := { hxPost := "/todos", hxTarget := "#todo-list-section",
+                    (hx := { hxPost := links.todos, hxTarget := "#todo-list-section",
                              hxSwap := some .outerHTML })
                     (rawAttrs := [("hx-on::after-request", "this.reset()")]) ]
                 (attrs := { class_ := "header" }),

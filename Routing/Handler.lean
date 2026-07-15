@@ -69,4 +69,37 @@ but is expected to have type
 def badArity : HandlerType userPattern String :=
   fun (_id : Nat) (_extra : String) => "oops"
 
+/-- The Lean type a reverse-routing function for `segs` produces: a `String` once every capture
+has been supplied a value, one curried argument per capture segment beforehand -- the mirror image
+of `HandlerType`, which computes a request *handler*'s argument types from the same `segs` value.
+Marked `@[reducible]` for the same reason as `CaptureKind.type` (`Pattern.lean`): typeclass search
+(here, `DecidableEq` for the `#guard` tests below) uses stricter transparency than ordinary
+elaboration. -/
+@[reducible] def LinkType : List PathSeg → Type
+  | [] => String
+  | .lit _ :: rest => LinkType rest
+  | .capture _ kind :: rest => kind.type → LinkType rest
+
+/-- Builds the `/`-joined path for `segs`, given the literal/rendered-capture parts collected so
+far. Structural recursion over `segs`, mirroring `dispatch`, but producing a value (accumulating
+`parts`) instead of consuming a `List String` of an incoming request's path. -/
+def linkParts : (segs : List PathSeg) → List String → LinkType segs
+  | [], parts => "/" ++ String.intercalate "/" parts
+  | .lit s :: rest, parts => linkParts rest (parts ++ [s])
+  | .capture _ .nat :: rest, parts => fun n => linkParts rest (parts ++ [toString n])
+  | .capture _ .string :: rest, parts => fun s => linkParts rest (parts ++ [s])
+
+/-- The reverse-routing function for a route pattern's segments: a `String`, or a function taking
+one argument per capture (in order) and returning one, e.g. `linkFor (parsePattern! "/todos/:id:Nat")
+: Nat → String`. -/
+def linkFor (segs : List PathSeg) : LinkType segs := linkParts segs []
+
+-- #guard tests: no captures, one capture, a capture followed by more literal segments, and a
+-- `String` (not just `Nat`) capture.
+#guard linkFor ([] : List PathSeg) = "/"
+#guard linkFor [.lit "active"] = "/active"
+#guard linkFor (parsePattern! "/todos/:id:Nat") 42 = "/todos/42"
+#guard linkFor (parsePattern! "/todos/:id:Nat/edit") 42 = "/todos/42/edit"
+#guard linkFor (parsePattern! "/users/:name:String") "ada" = "/users/ada"
+
 end Routing
