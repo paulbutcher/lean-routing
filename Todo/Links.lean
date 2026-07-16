@@ -10,22 +10,22 @@ a link name denotes a URL, not a method.
 -/
 
 routeTable! Todo
-  [ "/"                    as index,
-    "/active"               as active,
-    "/completed"            as completed,
-    "/todos"                as todos,
-    "/todos/:id:Nat/edit"   as edit,
-    "/todos/:id:Nat"        as todo,
-    "/todos/:id:Nat/toggle" as toggle,
-    "/todos/toggle-all"     as toggleAll,
-    "/todos/completed"      as clearCompleted ]
+  [ "/"                      as index,
+    "/active"                as active,
+    "/completed"             as completed,
+    "/todos"                 as todos,
+    "/todos/:id:Nat"         as todo,
+    "/todos/:id:Nat/edit"    as edit,
+    "/todos/:id:Nat/toggle"  as toggle,
+    "/todos/toggle-all"      as toggleAll,
+    "/todos/clear-completed" as clearCompleted ]
 
 #guard Todo.links.index = "/"
 #guard Todo.links.active = "/active"
 #guard Todo.links.completed = "/completed"
 #guard Todo.links.todos = "/todos"
 #guard Todo.links.toggleAll = "/todos/toggle-all"
-#guard Todo.links.clearCompleted = "/todos/completed"
+#guard Todo.links.clearCompleted = "/todos/clear-completed"
 #guard Todo.links.todo 7 = "/todos/7"
 #guard Todo.links.edit 7 = "/todos/7/edit"
 #guard Todo.links.toggle 7 = "/todos/7/toggle"
