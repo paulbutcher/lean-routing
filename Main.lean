@@ -10,6 +10,7 @@ open Std Http Server
 open Html
 open Routing
 open Forms
+open Routes
 
 def render (db : SQLite) (filter : Todo.Filter)
     (renderHtml : Array Todo.Item → Array Todo.Item → Todo.Filter → String) :
@@ -70,16 +71,16 @@ def clearCompletedHandler (db : SQLite) (req : Request Body.Stream) :
 
 def app (db : SQLite) : StatelessHandler :=
   List.map (· db) [
-    .get Routes.patterns.index ∘ pageHandler .all,
-    .get Routes.patterns.active ∘ pageHandler .active,
-    .get Routes.patterns.completed ∘ pageHandler .completed,
-    .post Routes.patterns.todos ∘ addHandler,
-    .get Routes.patterns.edit ∘ editHandler,
-    .put Routes.patterns.todo ∘ saveHandler,
-    .post Routes.patterns.toggle ∘ toggleHandler,
-    .delete Routes.patterns.todo ∘ deleteHandler,
-    .post Routes.patterns.toggleAll ∘ toggleAllHandler,
-    .delete Routes.patterns.clearCompleted ∘ clearCompletedHandler
+    .get patterns.index ∘ pageHandler .all,
+    .get patterns.active ∘ pageHandler .active,
+    .get patterns.completed ∘ pageHandler .completed,
+    .post patterns.todos ∘ addHandler,
+    .get patterns.edit ∘ editHandler,
+    .put patterns.todo ∘ saveHandler,
+    .post patterns.toggle ∘ toggleHandler,
+    .delete patterns.todo ∘ deleteHandler,
+    .post patterns.toggleAll ∘ toggleAllHandler,
+    .delete patterns.clearCompleted ∘ clearCompletedHandler
   ] |> toHandler
 
 def main : IO Unit := Async.block do
