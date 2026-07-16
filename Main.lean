@@ -79,8 +79,8 @@ def app (db : SQLite) : StatelessHandler :=
     .post Routes.patterns.toggle ∘ toggleHandler,
     .delete Routes.patterns.todo ∘ deleteHandler,
     .post Routes.patterns.toggleAll ∘ toggleAllHandler,
-    .delete Routes.patterns.clearCompleted ∘ clearCompletedHandler ]
-  |> toHandler
+    .delete Routes.patterns.clearCompleted ∘ clearCompletedHandler
+  ] |> toHandler
 
 def main : IO Unit := Async.block do
   let db ← SQLite.open ":memory:"
