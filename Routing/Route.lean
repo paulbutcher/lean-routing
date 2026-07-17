@@ -4,16 +4,14 @@ import Routing.Handler
 /-!
 Bundling a method, a path pattern, and a matching handler into a `Route`,
 and dispatching an incoming `(Method, path)` against a table of them in
-order. Method dispatch is ordinary pattern matching against
-`Std.Http.Method` (a plain closed inductive, `Std/Http/Data/Method.lean`)
--- no type-safety question there, per `docs/routing-design-plan.md` §5.
+order.
 -/
 
 namespace Routing
 
 open Std.Http (Method)
 
-/-- One route: an HTTP method, a path pattern (as already-parsed segments,
+/-- An HTTP method, a path pattern (as already-parsed segments,
 so `HandlerType segs result` -- and therefore `handler`'s arity/types --
 is checked at the point the route is built), and its handler. -/
 structure Route (result : Type) where
@@ -21,34 +19,41 @@ structure Route (result : Type) where
   segs : List PathSeg
   handler : HandlerType segs result
 
-/-- Builds a `Route` from a method, a pattern *string*, and a handler.
-The pattern is parsed with `parsePattern!`, which panics on a malformed
-pattern -- acceptable here because route patterns are source-code literals
-written by the route author, so a malformed one is a programming error
-that should surface immediately at startup, not something to recover from
-at request time (`Pattern.lean`'s `parsePattern!` docstring). -/
+/-- Builds a `Route` from a method, a pattern *string*, and a handler. The pattern is parsed with
+`parsePattern!`, which fails to compile on a malformed pattern -- acceptable here because route
+patterns are source-code literals written by the route author, so a malformed one is a
+programming error that should be an elaboration error right at this call, not something to
+recover from at request time (`Pattern.lean`'s `parsePattern!` docstring). `h` re-derives
+`parsePattern!`'s own `autoParam` explicitly (rather than leaving each call below to its own
+default) so both calls agree on one proof and `route` itself still elaborates with `pattern`
+symbolic. -/
 def route (method : Method) (pattern : String) {result : Type}
-    (handler : HandlerType (parsePattern! pattern) result) : Route result :=
-  { method, segs := parsePattern! pattern, handler }
+    (h : (parsePattern pattern).isSome := by decide)
+    (handler : HandlerType (parsePattern! pattern h) result) : Route result :=
+  { method, segs := parsePattern! pattern h, handler }
 
 /-- Per-method aliases for `route`, so a route table can write `.get`/`.post`/`.put`/`.delete`
 (resolved via Lean's generalized dot notation against the list's expected `Route result` element
 type) instead of `route .get`/`route .post`/etc. -/
 def Route.get (pattern : String) {result : Type}
-    (handler : HandlerType (parsePattern! pattern) result) : Route result :=
-  route .get pattern handler
+    (h : (parsePattern pattern).isSome := by decide)
+    (handler : HandlerType (parsePattern! pattern h) result) : Route result :=
+  route .get pattern h handler
 
 def Route.post (pattern : String) {result : Type}
-    (handler : HandlerType (parsePattern! pattern) result) : Route result :=
-  route .post pattern handler
+    (h : (parsePattern pattern).isSome := by decide)
+    (handler : HandlerType (parsePattern! pattern h) result) : Route result :=
+  route .post pattern h handler
 
 def Route.put (pattern : String) {result : Type}
-    (handler : HandlerType (parsePattern! pattern) result) : Route result :=
-  route .put pattern handler
+    (h : (parsePattern pattern).isSome := by decide)
+    (handler : HandlerType (parsePattern! pattern h) result) : Route result :=
+  route .put pattern h handler
 
 def Route.delete (pattern : String) {result : Type}
-    (handler : HandlerType (parsePattern! pattern) result) : Route result :=
-  route .delete pattern handler
+    (h : (parsePattern pattern).isSome := by decide)
+    (handler : HandlerType (parsePattern! pattern h) result) : Route result :=
+  route .delete pattern h handler
 
 /-- Matches one route against an incoming method and decoded path,
 producing the handler's result applied to any extracted captures. `none`

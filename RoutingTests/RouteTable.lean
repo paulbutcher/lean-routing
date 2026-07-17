@@ -7,8 +7,6 @@ routeTable! RouteTableTest
     "/active" as active,
     "/todos/:id:Nat/edit" as edit ]
 
--- #guard tests: the pattern and link structures' shapes and their values -- same shape
--- `Todo/Links.lean` proved by hand before this macro automated it.
 #guard RouteTableTest.patterns.index = "/"
 #guard RouteTableTest.patterns.active = "/active"
 #guard RouteTableTest.patterns.edit = "/todos/:id:Nat/edit"

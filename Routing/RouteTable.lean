@@ -8,10 +8,6 @@ import Routing.Handler
 pattern -- `Handler.lean`), and the corresponding field of `App.links` (built with
 `Routing.linkFor`). This is exactly `Todo/Links.lean`'s hand-written shape from the routing design
 plan's reverse-routing spike, automated.
-
-Deliberately verb-less: a link name denotes a URL, not an HTTP method, so a name is declared once
-here regardless of how many methods a route table (`Main.lean`'s hand-written `routes`, unchanged
-by this macro) later dispatches to that same pattern.
 -/
 
 namespace Routing
@@ -53,9 +49,12 @@ private def segSrc : PathSeg → String
 
 /-- Parses `pat`'s string value with the real `Routing.parsePattern` (so this can never drift from
 what `Main.lean`'s dispatch table itself accepts), then renders the result back to Lean source
-text for a `List PathSeg` literal. `throwErrorAt pat` on a malformed pattern -- deliberately not
-`parsePattern!`, whose silent `getD []` fallback (`Pattern.lean`) is fine for a pattern trusted to
-already be well-formed, but not for one a macro is about to bake into a generated declaration. -/
+text for a `List PathSeg` literal. `throwErrorAt pat` on a malformed pattern directly, rather than
+routing through `parsePattern!` (`Pattern.lean`): its result is meta-level (this runs in
+`CommandElabM`, building source text for codegen, not elaborating an object-level term), so
+there's no call site for `parsePattern!`'s `by decide` `autoParam` to run against -- plain
+`parsePattern` plus an explicit match is the natural way to get the same "malformed pattern is a
+macro-time elaboration error" guarantee here. -/
 private def segsSrcFor (pat : TSyntax `str) : CommandElabM String := do
   match parsePattern pat.getString with
   | some segs => pure <| "[" ++ String.intercalate ", " (segs.map segSrc) ++ "]"

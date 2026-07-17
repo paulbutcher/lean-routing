@@ -2,11 +2,10 @@ import Routing.Route
 
 namespace Routing
 
--- #guard tests: first match wins, method mismatch, path mismatch all fall through.
 private def testRoutes : List (Route String) :=
-  [ .get "/" "home",
-    .get "/users/:id:Nat" (fun (id : Nat) => s!"user #{id}"),
-    .post "/users/:id:Nat" (fun (id : Nat) => s!"created #{id}") ]
+  [ .get "/" (handler := "home"),
+    .get "/users/:id:Nat" (handler := fun (id : Nat) => s!"user #{id}"),
+    .post "/users/:id:Nat" (handler := fun (id : Nat) => s!"created #{id}") ]
 
 #guard dispatchTable testRoutes .get [] = some "home"
 #guard dispatchTable testRoutes .get ["users", "7"] = some "user #7"
@@ -14,5 +13,9 @@ private def testRoutes : List (Route String) :=
 #guard dispatchTable testRoutes .get ["users", "nope"] = none
 #guard dispatchTable testRoutes .delete ["users", "7"] = none
 #guard dispatchTable testRoutes .get ["missing"] = none
+
+-- Negative-compile regression: a malformed pattern is an elaboration error at the route
+-- definition
+#check_failure Route.get (result := String) "not-a-valid-pattern"
 
 end Routing

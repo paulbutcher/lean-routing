@@ -1,28 +1,17 @@
 /-!
 Route pattern strings (`"/users/:id:Nat/posts/:slug:String"`) parsed into
-`List PathSeg`. See `docs/routing-design-plan.md` §3 for why this parser is
-hand-rolled structural recursion over `List Char` rather than
-`String.splitOn`: on this toolchain (`v4.31.0`, `String` rebuilt around
-`String.Slice`), a `String.splitOn`-based parser does not reduce through
-kernel defeq, which silently breaks `HandlerType`-computed types (`Handler.lean`)
-built from its output. A hand-rolled `List Char` recursion was confirmed (by
-the throwaway spike behind this design doc) to reduce fine.
+`List PathSeg`.
 -/
 
 namespace Routing
 
-/-- The two capture types supported in v1. Closed by design for now --
-whether to open this into a typeclass is deferred, see
-`docs/routing-design-plan.md` §5. -/
+/-- The two capture types currently supported. This might become a typeclass some day -/
 inductive CaptureKind where
   | nat
   | string
 deriving Repr, DecidableEq
 
-/-- The Lean `Type` a capture of this kind produces. Marked `@[reducible]`
-because typeclass search uses stricter transparency than ordinary
-elaboration and can otherwise fail to see through this even where `rfl`
-succeeds -- see `docs/routing-design-plan.md` §4. -/
+/-- The `Type` a capture of this kind produces. -/
 @[reducible] def CaptureKind.type : CaptureKind → Type
   | .nat => Nat
   | .string => String
@@ -90,8 +79,7 @@ def splitOnceColon : List Char → Option (List Char × List Char)
 /-- Parses one path segment's characters into a `PathSeg`. A segment
 starting with `':'` is parsed as a capture (`name:kind`, kind must be a
 known `CaptureKind.name`); anything else is a literal. Malformed captures
-(missing kind, unknown kind name, empty capture name) fail via `none`,
-never a panic -- see the `#guard` regressions in `RoutingTests/Pattern.lean`. -/
+(missing kind, unknown kind name, empty capture name) fail via `none`. -/
 def parseSeg (cs : List Char) : Option PathSeg :=
   match cs with
   | [] => none
@@ -112,8 +100,7 @@ def parseSeg (cs : List Char) : Option PathSeg :=
         some (.lit (String.ofList (c :: rest)))
 
 /-- Splits a `List Char` on `'/'`, e.g. `"a/bc/d".toList` splits to
-`[['a'], ['b','c'], ['d']]`. A structural recursion over `List Char`, never
-`String.splitOn` -- see the module docstring. -/
+`[['a'], ['b','c'], ['d']]`. -/
 def splitChars : List Char → List (List Char)
   | [] => [[]]
   | c :: rest =>
@@ -142,11 +129,9 @@ def parsePattern (s : String) : Option (List PathSeg) :=
   | '/' :: rest => mapSegs (splitChars rest)
   | _ => none
 
-/-- Parses a route pattern, panicking on a malformed pattern. Intended only
-for pattern strings written as source-code literals by the route author
-(so a malformed pattern is a programming error caught immediately at
-startup), never for untrusted input. -/
-def parsePattern! (s : String) : List PathSeg :=
-  (parsePattern s).getD []
+/-- Parses a route pattern, failing to compile if the pattern is malformed. Intended only for
+pattern strings written as source-code literals by the route author, never for untrusted input. -/
+def parsePattern! (s : String) (h : (parsePattern s).isSome := by decide) : List PathSeg :=
+  (parsePattern s).get h
 
 end Routing

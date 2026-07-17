@@ -2,30 +2,29 @@ import Routing.Pattern
 
 namespace Routing
 
--- #guard tests: well-formed patterns.
 #guard parsePattern "/" = some []
 #guard parsePattern "/users" = some [.lit "users"]
 #guard parsePattern "/users/:id:Nat" = some [.lit "users", .capture "id" .nat]
 #guard parsePattern "/users/:id:Nat/posts/:slug:String"
   = some [.lit "users", .capture "id" .nat, .lit "posts", .capture "slug" .string]
 
--- #guard tests: malformed patterns fail via `none`, never a panic (§3/§6).
-#guard parsePattern "" = none                        -- no leading '/'
-#guard parsePattern "users/:id:Nat" = none            -- no leading '/'
+-- malformed patterns fail via `none`
+#guard parsePattern "" = none                          -- no leading '/'
+#guard parsePattern "users/:id:Nat" = none             -- no leading '/'
 #guard parsePattern "/users//id" = none                -- doubled '/' ⇒ empty segment
 #guard parsePattern "/users/" = none                   -- trailing '/' ⇒ empty segment
 #guard parsePattern "/users/:id:Bool" = none           -- unknown capture kind
 #guard parsePattern "/users/:id" = none                -- missing capture kind
 #guard parsePattern "/users/::Nat" = none              -- empty capture name
 
-/-! ## Round-trip: `renderPattern` and `parsePattern` are mutual inverses
+-- `parsePattern!` fails to *compile* on a malformed pattern (its `h` autoParam's `by decide`
+-- fails against the literal), rather than returning a bogus value or panicking at runtime.
+-- `#check_failure` is itself the assertion here: it's a build error if the term *doesn't* fail
+-- to elaborate, so there's no fragile error-message text to pin down.
+#check_failure parsePattern! "not-a-valid-pattern"
 
-Dispatch and capture typing are already guaranteed by `HandlerType`/the
-equation compiler (`Handler.lean`) -- no proof needed there, typing gives
-it for free. This parser is hand-written specifically because the stdlib
-path (`String.splitOn`) failed (`Routing/Pattern.lean`'s module docstring),
-so its correctness is not implied by anything else in this design and gets
-its own proof, per `docs/routing-design-plan.md` §6. -/
+/-! ## Round-trip: `renderPattern` and `parsePattern` are mutual inverses
+ -/
 
 private theorem splitOnceColon_append (name tail : List Char)
     (h : ∀ c ∈ name, c ≠ ':') :
@@ -119,10 +118,7 @@ private theorem mapSegs_toString : ∀ (segs : List PathSeg), (∀ seg ∈ segs,
 /-- **The round-trip property, and the main piece of formal verification for
 `Routing/Pattern.lean`**: rendering a well-formed list of path segments back to a
 pattern string, then parsing that string, recovers exactly the original
-segments. Together with the `#guard` regressions above (malformed input
-never panics, always fails via `none`), this is the correctness guarantee
-`docs/routing-design-plan.md` §6 asks for -- unlike dispatch/capture
-typing, nothing about the equation compiler gives this to us for free. -/
+segments. -/
 theorem parsePattern_renderPattern (segs : List PathSeg) (h : ∀ seg ∈ segs, seg.WellFormed) :
     parsePattern (renderPattern segs) = some segs := by
   have htoList : (renderPattern segs).toList
