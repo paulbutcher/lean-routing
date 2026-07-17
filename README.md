@@ -29,7 +29,7 @@ routeTable! App
 
 This is a macro which parses the route specifications and generates `App.patterns` (the parsed patterns, for step 2) and `App.links`. (link-building functions — see below).
 
-### 2. Attach handlers and build the route table
+### 2. Combine route handlers into an application
 
 ```lean
 import Routing.Route
@@ -37,14 +37,12 @@ import Routing.Route
 open Routing
 open App
 
-def routes : List (Route Result) :=
-  [ .get patterns.index (fun request => Response.ok.text "home"),
+def app : StatelessHandler := [
+    .get patterns.index (fun request => Response.ok.text "home"),
     .get patterns.user (fun (id : Nat) request => Response.ok.text s!"user #{id}"),
-    .post patterns.userPost (fun (id : Nat) (slug : String) request => Response.ok.text s!"user #{id}, post {slug}") ]
+    .post patterns.userPost (fun (id : Nat) (slug : String) request => Response.ok.text s!"user #{id}, post {slug}")
+  ] |> toHandler
 ```
-
-The handler takes one argument per capture in the pattern (`:id:Nat` → `Nat`, `:slug:String`
-→ `String`), in order, followed by the request itself.
 
 ### 3. Wire into a server
 
@@ -52,7 +50,7 @@ The handler takes one argument per capture in the pattern (`:id:Nat` → `Nat`, 
 import Routing.Server
 
 def main : IO Unit := do
-  ... Std.Http.Server.run (Routing.toHandler routes) ...
+  ... Std.Http.Server.run app ...
 ```
 
 Unmatched requests get a default `404 Not Found`; pass `notFound := ...` to `toHandler` to
