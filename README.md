@@ -44,6 +44,9 @@ def app : StatelessHandler := [
   ] |> toHandler
 ```
 
+Unmatched requests get a default `404 Not Found`; pass `notFound := ...` to `toHandler` to
+override it.
+
 ### 3. Wire into a server
 
 ```lean
@@ -52,9 +55,6 @@ import Routing.Server
 def main : IO Unit := do
   ... Std.Http.Server.run app ...
 ```
-
-Unmatched requests get a default `404 Not Found`; pass `notFound := ...` to `toHandler` to
-override it.
 
 ### Generating links
 
