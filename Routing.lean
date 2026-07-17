@@ -55,10 +55,11 @@ silently breaks `HandlerType`-computed types built from its output (the
 design doc's §3 records the isolated repro). Dispatch and capture typing
 are guaranteed by `HandlerType`/the equation compiler with no proof
 needed; the hand-rolled parser is the exception, and has a real
-`theorem` (`parsePattern_renderPattern`, `Routing/Pattern.lean`) proving it
+`theorem` (`parsePattern_renderPattern`, `RoutingTests/Pattern.lean`) proving it
 round-trips on well-formed input, plus `#guard` regressions for malformed
 input (doubled/trailing `/`, unknown or missing capture kind, empty
-capture name) all failing via `none`, never a panic.
+capture name) all failing via `none`, never a panic. Tests live in the
+separate `RoutingTests` library (`lakefile.toml`'s `testDriver`).
 
 ## Not yet supported (deferred, see `docs/routing-design-plan.md` §5)
 
