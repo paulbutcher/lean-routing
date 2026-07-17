@@ -38,11 +38,9 @@ open Routing
 open App
 
 def routes : List (Route Result) :=
-  [ .get patterns.index (handler := fun request => Response.ok.text "home"),
-    .get patterns.user (handler := fun (id : Nat) request =>
-      Response.ok.text s!"user #{id}"),
-    .post patterns.userPost (handler := fun (id : Nat) (slug : String) request =>
-      Response.ok.text s!"user #{id}, post {slug}") ]
+  [ .get patterns.index (fun request => Response.ok.text "home"),
+    .get patterns.user (fun (id : Nat) request => Response.ok.text s!"user #{id}"),
+    .post patterns.userPost (fun (id : Nat) (slug : String) request => Response.ok.text s!"user #{id}, post {slug}") ]
 ```
 
 The handler takes one argument per capture in the pattern (`:id:Nat` → `Nat`, `:slug:String`
