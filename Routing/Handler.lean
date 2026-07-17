@@ -8,9 +8,9 @@ compilation, not just reasoning about it) that `HandlerType` reduces
 through ordinary kernel defeq (`rfl`) with **zero extra machinery** -- no
 macro, no typeclass dispatch step -- which is what lets a wrong-arity
 handler be rejected as an ordinary compile-time type error (the
-`#guard_msgs` regression below), the same way Servant's type-level
-encoding does in Haskell, but without needing DataKinds/type families to
-fake a type depending on a value.
+`#guard_msgs` regression in `RoutingTests/Handler.lean`), the same way
+Servant's type-level encoding does in Haskell, but without needing
+DataKinds/type families to fake a type depending on a value.
 -/
 
 namespace Routing
@@ -41,34 +41,6 @@ def dispatch {result : Type} :
   | .capture _ .string :: rest, h, p :: ps => dispatch rest (h p) ps
   | _, _, _ => none
 
-private def userPattern : List PathSeg := parsePattern! "/users/:id:Nat"
-
-private def userHandler : HandlerType userPattern String :=
-  fun (id : Nat) => s!"user #{id}"
-
--- #guard tests: dispatch success, mistyped capture, literal mismatch, arity mismatch.
-#guard dispatch userPattern userHandler ["users", "42"] = some "user #42"
-#guard dispatch userPattern userHandler ["users", "notanumber"] = none
-#guard dispatch userPattern userHandler ["posts", "42"] = none          -- literal mismatch
-#guard dispatch userPattern userHandler ["users"] = none                -- too few path segments
-#guard dispatch userPattern userHandler ["users", "42", "extra"] = none -- too many path segments
-
--- Negative-compile regression (§2): a wrong-arity handler against a real
--- pattern is rejected at compile time, pointing at the actual value
--- mismatch -- this is the whole payoff of computing the handler's type
--- from pattern data instead of hand-writing/documenting the arity.
-/--
-error: Type mismatch
-  fun _id _extra => "oops"
-has type
-  Nat → String → String
-but is expected to have type
-  HandlerType userPattern String
--/
-#guard_msgs in
-def badArity : HandlerType userPattern String :=
-  fun (_id : Nat) (_extra : String) => "oops"
-
 /-- The Lean type a reverse-routing function for `segs` produces: a `String` once every capture
 has been supplied a value, one curried argument per capture segment beforehand -- the mirror image
 of `HandlerType`, which computes a request *handler*'s argument types from the same `segs` value.
@@ -93,13 +65,5 @@ def linkParts : (segs : List PathSeg) → List String → LinkType segs
 one argument per capture (in order) and returning one, e.g. `linkFor (parsePattern! "/todos/:id:Nat")
 : Nat → String`. -/
 def linkFor (segs : List PathSeg) : LinkType segs := linkParts segs []
-
--- #guard tests: no captures, one capture, a capture followed by more literal segments, and a
--- `String` (not just `Nat`) capture.
-#guard linkFor ([] : List PathSeg) = "/"
-#guard linkFor [.lit "active"] = "/active"
-#guard linkFor (parsePattern! "/todos/:id:Nat") 42 = "/todos/42"
-#guard linkFor (parsePattern! "/todos/:id:Nat/edit") 42 = "/todos/42/edit"
-#guard linkFor (parsePattern! "/users/:name:String") "ada" = "/users/ada"
 
 end Routing

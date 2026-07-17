@@ -90,7 +90,7 @@ def splitOnceColon : List Char → Option (List Char × List Char)
 starting with `':'` is parsed as a capture (`name:kind`, kind must be a
 known `CaptureKind.name`); anything else is a literal. Malformed captures
 (missing kind, unknown kind name, empty capture name) fail via `none`,
-never a panic -- see the `#guard` regressions below. -/
+never a panic -- see the `#guard` regressions in `RoutingTests/Pattern.lean`. -/
 def parseSeg (cs : List Char) : Option PathSeg :=
   match cs with
   | [] => none
@@ -147,22 +147,6 @@ for pattern strings written as source-code literals by the route author
 startup), never for untrusted input. -/
 def parsePattern! (s : String) : List PathSeg :=
   (parsePattern s).getD []
-
--- #guard tests: well-formed patterns.
-#guard parsePattern "/" = some []
-#guard parsePattern "/users" = some [.lit "users"]
-#guard parsePattern "/users/:id:Nat" = some [.lit "users", .capture "id" .nat]
-#guard parsePattern "/users/:id:Nat/posts/:slug:String"
-  = some [.lit "users", .capture "id" .nat, .lit "posts", .capture "slug" .string]
-
--- #guard tests: malformed patterns fail via `none`, never a panic (§3/§6).
-#guard parsePattern "" = none                        -- no leading '/'
-#guard parsePattern "users/:id:Nat" = none            -- no leading '/'
-#guard parsePattern "/users//id" = none                -- doubled '/' ⇒ empty segment
-#guard parsePattern "/users/" = none                   -- trailing '/' ⇒ empty segment
-#guard parsePattern "/users/:id:Bool" = none           -- unknown capture kind
-#guard parsePattern "/users/:id" = none                -- missing capture kind
-#guard parsePattern "/users/::Nat" = none              -- empty capture name
 
 /-! ## Round-trip: `renderPattern` and `parsePattern` are mutual inverses
 
@@ -265,9 +249,9 @@ private theorem mapSegs_toString : ∀ (segs : List PathSeg), (∀ seg ∈ segs,
 /-- **The round-trip property, and the main piece of formal verification in
 this file**: rendering a well-formed list of path segments back to a
 pattern string, then parsing that string, recovers exactly the original
-segments. Together with the `#guard` regressions above (malformed input
-never panics, always fails via `none`), this is the correctness guarantee
-`docs/routing-design-plan.md` §6 asks for -- unlike dispatch/capture
+segments. Together with the `#guard` regressions in `RoutingTests/Pattern.lean`
+(malformed input never panics, always fails via `none`), this is the correctness
+guarantee `docs/routing-design-plan.md` §6 asks for -- unlike dispatch/capture
 typing, nothing about the equation compiler gives this to us for free. -/
 theorem parsePattern_renderPattern (segs : List PathSeg) (h : ∀ seg ∈ segs, seg.WellFormed) :
     parsePattern (renderPattern segs) = some segs := by
