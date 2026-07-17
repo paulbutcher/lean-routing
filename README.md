@@ -1,6 +1,6 @@
 # Routing
 
-A typed HTTP router for Lean 4 / [`Std.Http`](https://github.com/leanprover/std4). Route
+A typed HTTP router for Lean 4 / [`Std.Http`](https://leanprover-community.github.io/mathlib4_docs/Std/Http.html). Route
 patterns like `"/users/:id:Nat"` determine the exact type your handler must have — a
 wrong-arity or wrong-type handler is a compile error, not a runtime bug.
 
