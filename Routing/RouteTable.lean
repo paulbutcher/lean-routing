@@ -3,11 +3,16 @@ import Routing.Handler
 
 /-!
 `routeTable! App [ "pattern" as name, ... ]`: generates, for each row, a field of a generated
-`App.Patterns` structure (`String`, the pattern text itself) and the corresponding field of
-`App.patterns`, a field of a generated `App.Links` structure (`Routing.LinkType` of the parsed
-pattern -- `Handler.lean`), and the corresponding field of `App.links` (built with
-`Routing.linkFor`). This is exactly `Todo/Links.lean`'s hand-written shape from the routing design
-plan's reverse-routing spike, automated.
+`App.Patterns` structure (`List Routing.PathSeg`, the parsed pattern) and the corresponding field
+of `App.patterns`, and a field of a generated `App.Links` structure (`Routing.LinkType` of the
+parsed pattern -- `Handler.lean`) and the corresponding field of `App.links` (built with
+`Routing.linkFor`). This is exactly `Todo/Links.lean`'s hand-written shape from the routing
+design plan's reverse-routing spike, automated.
+
+Every pattern is parsed exactly once, right here, at the `routeTable!` row that declares it --
+a malformed pattern is a compile error at that row. `App.patterns`, consumed directly by
+`Route.get`/`.post`/etc. (`Route.lean`), is how a route built from this table avoids re-parsing
+(and so re-validating) the same pattern string a second time.
 -/
 
 namespace Routing
@@ -76,10 +81,15 @@ elab_rules : command
         throwErrorAt name s!"route name '{name.getId}' already declared at {prior}"
       seen := seen.insert name.getId name
 
-    -- 3/4. `structure App.Patterns where name : String ...` and
-    -- `def App.patterns : App.Patterns := { name := "pattern", ... }`.
+    -- Parse each pattern once here, reused below by both `Patterns` (3/4) and `Links` (5/6) --
+    -- rather than each calling `segsSrcFor` (and so re-running `parsePattern`) separately.
+    let segsSrcs ← entries.toList.mapM fun (pat, name) => do
+      pure (name, ← segsSrcFor pat)
+
+    -- 3/4. `structure App.Patterns where name : List Routing.PathSeg ...` and
+    -- `def App.patterns : App.Patterns := { name := [PathSeg literal], ... }`.
     --
-    -- Two things worth flagging:
+    -- Three things worth flagging:
     --
     -- * Built as source text and reparsed (`elabCommandFromSource` above) rather than spliced via
     --   `$[...]*` quotation antiquotations: `structure`'s field list (`structFields`, `Parser/
@@ -90,15 +100,20 @@ elab_rules : command
     --   this quotation) before falling back to this approach, matching `docs/routing-design-
     --   plan.md`'s own spike-first methodology.
     -- * The same technique is reused below (5/6) for `App.Links`/`App.links`.
+    -- * Fields are typed by an already-parsed `List PathSeg` *literal* (`segsSrcFor`), not a
+    --   `Routing.parsePattern! "pattern"` call for the elaborator to reduce -- this is the field
+    --   `Route.get`/`.post`/`.put`/`.delete` (`Route.lean`) are meant to consume: a `List PathSeg`
+    --   already known well-formed, so building a `Route` from it needs no further parsing (and so
+    --   has no failure mode of its own).
     let patternsTypeIdent := qualifyPlain appId appName `Patterns
     let patternsValIdent := qualifyPlain appId appName `patterns
     let patternFieldsSrc := String.intercalate "\n  " <|
-      entries.toList.map fun (_, name) => s!"{name.getId} : String"
+      segsSrcs.map fun (name, _) => s!"{name.getId} : List Routing.PathSeg"
     elabCommandFromSource appId
       s!"structure {patternsTypeIdent.getId} where\n  {patternFieldsSrc}"
 
     let patternValFieldsSrc := String.intercalate ", " <|
-      entries.toList.map fun (pat, name) => s!"{name.getId} := {pat.getString.quote}"
+      segsSrcs.map fun (name, segsSrc) => s!"{name.getId} := {segsSrc}"
     elabCommandFromSource appId <|
       "def " ++ toString patternsValIdent.getId ++ " : " ++ toString patternsTypeIdent.getId ++
         " := { " ++ patternValFieldsSrc ++ " }"
@@ -109,25 +124,23 @@ elab_rules : command
     -- Same source-text-and-reparse technique as 3/4 above (see that comment for why), plus one
     -- more wrinkle here:
     --
-    -- * Fields are typed by an already-parsed `List PathSeg` *literal* (`segsSrcFor`), not a
-    --   `Routing.parsePattern! "pattern"` call for the elaborator to reduce: a zero-capture field
-    --   (`toggleAll`, `clearCompleted`, ...) has no argument application to force that reduction,
-    --   so real usage (`Todo/Views.lean`'s `hxPost := links.toggleAll` against an `Option String`
-    --   field, via the `Coe String (Option String)` instance) failed to typecheck against the
-    --   `parsePattern!`-call form -- caught by building `Todo/Links.lean` against this macro for
-    --   real (`docs/todo-app-plan.md`'s own "verify end-to-end, not just typechecked" standard),
-    --   not by this file's own `#guard`s in isolation.
+    -- * `LinkType [PathSeg literal]`, not `LinkType App.Patterns.name`: a zero-capture field
+    --   (`toggleAll`, `clearCompleted`, ...) has no argument application to force reduction
+    --   through a *reference* to the `Patterns` field, so real usage (`Todo/Views.lean`'s
+    --   `hxPost := links.toggleAll` against an `Option String` field, via the `Coe String
+    --   (Option String)` instance) failed to typecheck against that form -- caught by building
+    --   `Todo/Links.lean` against this macro for real (`docs/todo-app-plan.md`'s own "verify
+    --   end-to-end, not just typechecked" standard), not by this file's own `#guard`s in
+    --   isolation. Splicing the literal again here (`segsSrcs`, computed once above) sidesteps it.
     let linksTypeIdent := qualifyPlain appId appName `Links
     let linksValIdent := qualifyPlain appId appName `links
     let structFieldsSrc := String.intercalate "\n  " <|
-      ← entries.toList.mapM fun (pat, name) => do
-        pure s!"{name.getId} : Routing.LinkType {← segsSrcFor pat}"
+      segsSrcs.map fun (name, segsSrc) => s!"{name.getId} : Routing.LinkType {segsSrc}"
     elabCommandFromSource appId
       s!"structure {linksTypeIdent.getId} where\n  {structFieldsSrc}"
 
     let valFieldsSrc := String.intercalate ", " <|
-      ← entries.toList.mapM fun (pat, name) => do
-        pure s!"{name.getId} := Routing.linkFor {← segsSrcFor pat}"
+      segsSrcs.map fun (name, segsSrc) => s!"{name.getId} := Routing.linkFor {segsSrc}"
     elabCommandFromSource appId <|
       "def " ++ toString linksValIdent.getId ++ " : " ++ toString linksTypeIdent.getId ++
         " := { " ++ valFieldsSrc ++ " }"
