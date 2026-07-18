@@ -33,4 +33,13 @@ routeTable! RouteTableTestDup
   [ index := "/",
     index := "/elsewhere" ]
 
+-- Negative-compile regression: a malformed pattern string is a command-time error at the row
+-- that declares it (`segsSrcFor`, `RouteTable.lean`), not a silently-accepted bad route.
+/--
+error: invalid route pattern "not-a-valid-pattern"
+-/
+#guard_msgs in
+routeTable! RouteTableTestInvalid
+  [ bad := "not-a-valid-pattern" ]
+
 end Routing
