@@ -4,6 +4,8 @@ A typed HTTP router for Lean 4 / [`Std.Http`](https://leanprover-community.githu
 patterns like `"/users/:id:Nat"` determine the exact type your handler must have — a
 wrong-arity or wrong-type handler is a compile error, not a runtime bug.
 
+See: [Formally verified CRUD](https://paulbutcher.com/lean2.html).
+
 ## Installation
 
 Add to your `lakefile.toml`:
