@@ -19,7 +19,7 @@ git = "https://github.com/paulbutcher/lean-routing.git"
 ### 1. Declare your routes
 
 ```lean
-import Routing.RouteTable
+import Routing
 
 routeTable! AppName
   [ index := "/",
@@ -32,8 +32,10 @@ This is a macro which parses the route specifications and generates `AppName.pat
 ### 2. Combine route handlers into an application
 
 ```lean
-import Routing.Route
+import Std.Http.Server
+import Routing
 
+open Std Http Server
 open Routing
 open AppName
 
@@ -50,8 +52,6 @@ override it.
 ### 3. Wire into a server
 
 ```lean
-import Routing.Server
-
 def main : IO Unit := do
   ... Std.Http.Server.run app ...
 ```
