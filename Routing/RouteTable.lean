@@ -2,7 +2,7 @@ import Lean
 import Routing.Handler
 
 /-!
-`routeTable! App [ "pattern" as name, ... ]`: generates, for each row, a field of a generated
+`routeTable! App [ name := "pattern", ... ]`: generates, for each row, a field of a generated
 `App.Patterns` structure (`List Routing.PathSeg`, the parsed pattern) and the corresponding field
 of `App.patterns`, and a field of a generated `App.Links` structure (`Routing.LinkType` of the
 parsed pattern -- `Handler.lean`) and the corresponding field of `App.links` (built with
@@ -20,7 +20,7 @@ namespace Routing
 open Lean Lean.Elab Lean.Elab.Command
 
 declare_syntax_cat routeTableRow
-syntax str "as" ident : routeTableRow
+syntax ident ":=" str : routeTableRow
 
 /-- The bracketed, comma-separated row list, factored out into its own named parser (rather than
 inlined into `routeTableCmd` below) because the `,*,?` sepBy-with-optional-trailing-comma sugar
@@ -71,7 +71,7 @@ elab_rules : command
     -- 1. Destructure each row into (pattern string literal, name).
     let entries ← rows.getElems.mapM fun row => do
       match row with
-      | `(routeTableRow| $pat:str as $name:ident) => pure (pat, name)
+      | `(routeTableRow| $name:ident := $pat:str) => pure (pat, name)
       | _ => throwUnsupportedSyntax
 
     -- 2. Reject a name declared twice -- each name denotes exactly one pattern.

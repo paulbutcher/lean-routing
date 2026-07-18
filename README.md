@@ -22,9 +22,9 @@ git = "https://github.com/paulbutcher/lean-routing.git"
 import Routing.RouteTable
 
 routeTable! AppName
-  [ "/" as index,
-    "/users/:id:Nat" as user,
-    "/users/:id:Nat/posts/:slug:String" as userPost ]
+  [ index := "/",
+    user := "/users/:id:Nat",
+    userPost := "/users/:id:Nat/posts/:slug:String" ]
 ```
 
 This is a macro which parses the route specifications and generates `AppName.patterns` (the parsed patterns, for step 2) and `AppName.links`. (link-building functions — see below).

@@ -4,9 +4,9 @@ import Routing.Route
 namespace Routing
 
 routeTable! RouteTableTest
-  [ "/" as index,
-    "/active" as active,
-    "/todos/:id:Nat/edit" as edit ]
+  [ index := "/",
+    active := "/active",
+    edit := "/todos/:id:Nat/edit" ]
 
 #guard RouteTableTest.patterns.index = []
 #guard RouteTableTest.patterns.active = [.lit "active"]
@@ -30,7 +30,7 @@ error: route name 'index' already declared at `index
 -/
 #guard_msgs in
 routeTable! RouteTableTestDup
-  [ "/" as index,
-    "/elsewhere" as index ]
+  [ index := "/",
+    index := "/elsewhere" ]
 
 end Routing
