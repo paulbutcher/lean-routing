@@ -2,7 +2,7 @@ import Routing.Handler
 
 namespace Routing
 
-private def userPattern : List PathSeg := parsePattern! "/users/:id:Nat"
+private def userPattern : List PathSeg := [.lit "users", .capture "id" .nat]
 
 private def userHandler : HandlerType userPattern String :=
   fun (id : Nat) => s!"user #{id}"
@@ -29,8 +29,8 @@ def badArity : HandlerType userPattern String :=
 
 #guard linkFor ([] : List PathSeg) = "/"
 #guard linkFor [.lit "active"] = "/active"
-#guard linkFor (parsePattern! "/todos/:id:Nat") 42 = "/todos/42"
-#guard linkFor (parsePattern! "/todos/:id:Nat/edit") 42 = "/todos/42/edit"
-#guard linkFor (parsePattern! "/users/:name:String") "ada" = "/users/ada"
+#guard linkFor [.lit "todos", .capture "id" .nat] 42 = "/todos/42"
+#guard linkFor [.lit "todos", .capture "id" .nat, .lit "edit"] 42 = "/todos/42/edit"
+#guard linkFor [.lit "users", .capture "name" .string] "ada" = "/users/ada"
 
 end Routing

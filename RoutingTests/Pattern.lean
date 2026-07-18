@@ -17,12 +17,6 @@ namespace Routing
 #guard parsePattern "/users/:id" = none                -- missing capture kind
 #guard parsePattern "/users/::Nat" = none              -- empty capture name
 
--- `parsePattern!` fails to *compile* on a malformed pattern (its `h` autoParam's `by decide`
--- fails against the literal), rather than returning a bogus value or panicking at runtime.
--- `#check_failure` is itself the assertion here: it's a build error if the term *doesn't* fail
--- to elaborate, so there's no fragile error-message text to pin down.
-#check_failure parsePattern! "not-a-valid-pattern"
-
 /-! ## Round-trip: `renderPattern` and `parsePattern` are mutual inverses
  -/
 

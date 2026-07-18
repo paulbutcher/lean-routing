@@ -129,9 +129,4 @@ def parsePattern (s : String) : Option (List PathSeg) :=
   | '/' :: rest => mapSegs (splitChars rest)
   | _ => none
 
-/-- Parses a route pattern, failing to compile if the pattern is malformed. Intended only for
-pattern strings written as source-code literals by the route author, never for untrusted input. -/
-def parsePattern! (s : String) (h : (parsePattern s).isSome := by decide) : List PathSeg :=
-  (parsePattern s).get h
-
 end Routing

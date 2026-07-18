@@ -45,8 +45,8 @@ private def elabCommandFromSource (ref : Syntax) (src : String) : CommandElabM U
 
 /-- Lean *source text* for one already-parsed `PathSeg`, e.g. `.lit "todos"` renders as
 `Routing.PathSeg.lit "todos"`. Used (below) to splice an already-parsed, already-in-normal-form
-`List PathSeg` *literal* into generated code, rather than a `Routing.parsePattern! "pattern"` call
-the elaborator would still have to reduce. -/
+`List PathSeg` *literal* into generated code, rather than a pattern-string call the elaborator
+would still have to reduce. -/
 private def segSrc : PathSeg → String
   | .lit s => s!"Routing.PathSeg.lit {s.quote}"
   | .capture name .nat => s!"Routing.PathSeg.capture {name.quote} .nat"
@@ -54,12 +54,10 @@ private def segSrc : PathSeg → String
 
 /-- Parses `pat`'s string value with the real `Routing.parsePattern` (so this can never drift from
 what `Main.lean`'s dispatch table itself accepts), then renders the result back to Lean source
-text for a `List PathSeg` literal. `throwErrorAt pat` on a malformed pattern directly, rather than
-routing through `parsePattern!` (`Pattern.lean`): its result is meta-level (this runs in
-`CommandElabM`, building source text for codegen, not elaborating an object-level term), so
-there's no call site for `parsePattern!`'s `by decide` `autoParam` to run against -- plain
-`parsePattern` plus an explicit match is the natural way to get the same "malformed pattern is a
-macro-time elaboration error" guarantee here. -/
+text for a `List PathSeg` literal. `throwErrorAt pat` on a malformed pattern directly: this runs in
+`CommandElabM`, building source text for codegen rather than elaborating an object-level term, so
+plain `parsePattern` plus an explicit match is the natural way to get "malformed pattern is a
+macro-time elaboration error" here. -/
 private def segsSrcFor (pat : TSyntax `str) : CommandElabM String := do
   match parsePattern pat.getString with
   | some segs => pure <| "[" ++ String.intercalate ", " (segs.map segSrc) ++ "]"
@@ -101,7 +99,7 @@ elab_rules : command
     --   plan.md`'s own spike-first methodology.
     -- * The same technique is reused below (5/6) for `App.Links`/`App.links`.
     -- * Fields are typed by an already-parsed `List PathSeg` *literal* (`segsSrcFor`), not a
-    --   `Routing.parsePattern! "pattern"` call for the elaborator to reduce -- this is the field
+    --   pattern-string call for the elaborator to reduce -- this is the field
     --   `Route.get`/`.post`/`.put`/`.delete` (`Route.lean`) are meant to consume: a `List PathSeg`
     --   already known well-formed, so building a `Route` from it needs no further parsing (and so
     --   has no failure mode of its own).

@@ -39,8 +39,8 @@ def linkParts : (segs : List PathSeg) → List String → LinkType segs
   | .capture _ .string :: rest, parts => fun s => linkParts rest (parts ++ [s])
 
 /-- The reverse-routing function for a route pattern's segments: a `String`, or a function taking
-one argument per capture (in order) and returning one, e.g. `linkFor (parsePattern! "/todos/:id:Nat")
-: Nat → String`. -/
+one argument per capture (in order) and returning one, e.g.
+`linkFor [.lit "todos", .capture "id" .nat] : Nat → String`. -/
 def linkFor (segs : List PathSeg) : LinkType segs := linkParts segs []
 
 end Routing
