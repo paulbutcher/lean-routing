@@ -21,13 +21,13 @@ git = "https://github.com/paulbutcher/lean-routing.git"
 ```lean
 import Routing.RouteTable
 
-routeTable! App
+routeTable! AppName
   [ "/" as index,
     "/users/:id:Nat" as user,
     "/users/:id:Nat/posts/:slug:String" as userPost ]
 ```
 
-This is a macro which parses the route specifications and generates `App.patterns` (the parsed patterns, for step 2) and `App.links`. (link-building functions — see below).
+This is a macro which parses the route specifications and generates `AppName.patterns` (the parsed patterns, for step 2) and `AppName.links`. (link-building functions — see below).
 
 ### 2. Combine route handlers into an application
 
@@ -35,7 +35,7 @@ This is a macro which parses the route specifications and generates `App.pattern
 import Routing.Route
 
 open Routing
-open App
+open AppName
 
 def app : StatelessHandler := [
     .get patterns.index (fun request => Response.ok.text "home"),
@@ -58,14 +58,14 @@ def main : IO Unit := do
 
 ### Generating links
 
-Use `App.links.<name>` anywhere you need a URL for one of your routes, e.g. in a template:
+Use `AppName.links.<name>` anywhere you need a URL for one of your routes, e.g. in a template:
 
 ```lean
-#eval App.links.index       -- "/"
-#eval App.links.user 42     -- "/users/42"
+#eval AppName.links.index       -- "/"
+#eval AppName.links.user 42     -- "/users/42"
 ```
 
-`App.links.user` is a function (`Nat → String`) because its pattern has one capture; a
+`AppName.links.user` is a function (`Nat → String`) because its pattern has one capture; a
 pattern with no captures gives a plain `String`.
 
 ### One-off routes without `routeTable!`
@@ -74,7 +74,7 @@ For a route that doesn't need a name or a link, `.getPattern`/`.postPattern`/`.p
 `.deletePattern` take a pattern string directly:
 
 ```lean
-.getPattern "/health" (handler := fun request => Response.ok.text "ok")
+.getPattern "/ping/:seq:Nat" (fun (seq: Nat) request => Response.ok.text s!"pong: #{seq}")
 ```
 
 ## License
