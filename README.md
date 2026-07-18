@@ -68,15 +68,6 @@ Use `AppName.links.<name>` anywhere you need a URL for one of your routes, e.g. 
 `AppName.links.user` is a function (`Nat → String`) because its pattern has one capture; a
 pattern with no captures gives a plain `String`.
 
-### One-off routes without `routeTable!`
-
-For a route that doesn't need a name or a link, `.getPattern`/`.postPattern`/`.putPattern`/
-`.deletePattern` take a pattern string directly:
-
-```lean
-.getPattern "/ping/:seq:Nat" (fun (seq: Nat) request => Response.ok.text s!"pong: #{seq}")
-```
-
 ## License
 
 This library is released under the Apache 2.0 license. See the LICENSE

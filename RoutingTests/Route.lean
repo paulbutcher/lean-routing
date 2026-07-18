@@ -22,18 +22,4 @@ private def testRoutes : List (Route String) :=
 #guard dispatchTable testRoutes .get ["users", "nope"] = none
 #guard dispatchTable testRoutes .get ["missing"] = none
 
--- `.getPattern`/`.postPattern`/etc., for a one-off route not declared via `routeTable!`.
-private def patternRoutes : List (Route String) :=
-  [ .getPattern "/" (handler := "home"),
-    .getPattern "/users/:id:Nat" (handler := fun (id : Nat) => s!"user #{id}"),
-    .postPattern "/users/:id:Nat" (handler := fun (id : Nat) => s!"created #{id}") ]
-
-#guard dispatchTable patternRoutes .get [] = some "home"
-#guard dispatchTable patternRoutes .get ["users", "7"] = some "user #7"
-#guard dispatchTable patternRoutes .post ["users", "7"] = some "created #7"
-
--- Negative-compile regression: a malformed pattern is an elaboration error at the route
--- definition
-#check_failure Route.getPattern (result := String) "not-a-valid-pattern"
-
 end Routing

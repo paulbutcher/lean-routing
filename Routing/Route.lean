@@ -20,27 +20,12 @@ structure Route (result : Type) where
   handler : HandlerType segs result
 
 /-- Builds a `Route` straight from already-parsed segments -- no parsing, so no failure mode at
-this call site. The primary way to build a `Route`: `segs` is meant to come from a
-`routeTable!`-generated `App.Patterns` value (`RouteTable.lean`), whose pattern was already
-validated at the `routeTable!` row that declared it. `routePattern` (below) is the same thing
-for a pattern *string*, parsed right here instead -- for a one-off route not declared via
-`routeTable!`. -/
+this call site. `segs` is meant to come from a `routeTable!`-generated `App.Patterns` value
+(`RouteTable.lean`), whose pattern was already validated at the `routeTable!` row that declared
+it. -/
 def route (method : Method) (segs : List PathSeg) {result : Type}
     (handler : HandlerType segs result) : Route result :=
   { method, segs, handler }
-
-/-- Builds a `Route` from a method, a pattern *string*, and a handler. The pattern is parsed with
-`parsePattern!`, which fails to compile on a malformed pattern -- acceptable here because route
-patterns are source-code literals written by the route author, so a malformed one is a
-programming error that should be an elaboration error right at this call, not something to
-recover from at request time (`Pattern.lean`'s `parsePattern!` docstring). `h` re-derives
-`parsePattern!`'s own `autoParam` explicitly (rather than leaving each call below to its own
-default) so both calls agree on one proof and `routePattern` itself still elaborates with
-`pattern` symbolic. -/
-def routePattern (method : Method) (pattern : String) {result : Type}
-    (h : (parsePattern pattern).isSome := by decide)
-    (handler : HandlerType (parsePattern! pattern h) result) : Route result :=
-  route method (parsePattern! pattern h) handler
 
 /-- Per-method aliases for `route`, for `segs` sourced from a `routeTable!`-generated
 `App.Patterns` value -- so a route table can write `.get`/`.post`/`.put`/`.delete` (resolved via
@@ -61,29 +46,6 @@ def Route.put (segs : List PathSeg) {result : Type} (handler : HandlerType segs 
 def Route.delete (segs : List PathSeg) {result : Type} (handler : HandlerType segs result) :
     Route result :=
   route .delete segs handler
-
-/-- Per-method aliases for `routePattern`, for a one-off route not declared via `routeTable!`, so
-it can write `.getPattern`/`.postPattern`/`.putPattern`/`.deletePattern` instead of
-`routePattern .get`/`routePattern .post`/etc. -/
-def Route.getPattern (pattern : String) {result : Type}
-    (h : (parsePattern pattern).isSome := by decide)
-    (handler : HandlerType (parsePattern! pattern h) result) : Route result :=
-  routePattern .get pattern h handler
-
-def Route.postPattern (pattern : String) {result : Type}
-    (h : (parsePattern pattern).isSome := by decide)
-    (handler : HandlerType (parsePattern! pattern h) result) : Route result :=
-  routePattern .post pattern h handler
-
-def Route.putPattern (pattern : String) {result : Type}
-    (h : (parsePattern pattern).isSome := by decide)
-    (handler : HandlerType (parsePattern! pattern h) result) : Route result :=
-  routePattern .put pattern h handler
-
-def Route.deletePattern (pattern : String) {result : Type}
-    (h : (parsePattern pattern).isSome := by decide)
-    (handler : HandlerType (parsePattern! pattern h) result) : Route result :=
-  routePattern .delete pattern h handler
 
 /-- Matches one route against an incoming method and decoded path,
 producing the handler's result applied to any extracted captures. `none`
