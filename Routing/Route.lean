@@ -55,9 +55,8 @@ def Route.tryDispatch (r : Route result) (method : Method) (path : List String) 
     Option result :=
   if r.method == method then dispatch r.segs r.handler path else none
 
-/-- Tries each route in order, returning the first match. This is the
-"table of routes" half of `docs/routing-design-plan.md` §5's wiring step;
-pairing it with `Std.Http.Server.Handler` is `Server.lean`. -/
+/-- Tries each route in order, returning the first match. Pairing this with
+`Std.Http.Server.Handler` is `Server.lean`. -/
 def dispatchTable (routes : List (Route result)) (method : Method) (path : List String) :
     Option result :=
   routes.findSome? (Route.tryDispatch · method path)

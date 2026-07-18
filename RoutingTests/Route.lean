@@ -2,9 +2,7 @@ import Routing.Route
 
 namespace Routing
 
--- `.get`/`.post`/etc. (`Route.lean`'s `route`/`.get`/`.post`/`.put`/`.delete`), taking
--- already-parsed segments directly -- what `routeTable!`'s generated `App.patterns`
--- (`RouteTable.lean`) is meant to feed them.
+-- Stands in for a `routeTable!`-generated `App.patterns` field.
 private def userSegs : List PathSeg := [.lit "users", .capture "id" .nat]
 
 private def testRoutes : List (Route String) :=

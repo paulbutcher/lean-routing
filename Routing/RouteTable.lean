@@ -6,8 +6,7 @@ import Routing.Handler
 `App.Patterns` structure (`List Routing.PathSeg`, the parsed pattern) and the corresponding field
 of `App.patterns`, and a field of a generated `App.Links` structure (`Routing.LinkType` of the
 parsed pattern -- `Handler.lean`) and the corresponding field of `App.links` (built with
-`Routing.linkFor`). This is exactly `Todo/Links.lean`'s hand-written shape from the routing
-design plan's reverse-routing spike, automated.
+`Routing.linkFor`).
 
 Every pattern is parsed exactly once, right here, at the `routeTable!` row that declares it --
 a malformed pattern is a compile error at that row. `App.patterns`, consumed directly by
@@ -87,22 +86,16 @@ elab_rules : command
     -- 3/4. `structure App.Patterns where name : List Routing.PathSeg ...` and
     -- `def App.patterns : App.Patterns := { name := [PathSeg literal], ... }`.
     --
-    -- Three things worth flagging:
+    -- Built as source text and reparsed (`elabCommandFromSource` above) rather than spliced via
+    -- `$[...]*` quotation antiquotations: `structure`'s field list (`structFields`, `Parser/
+    -- Command.lean`) is a `manyIndent`, which -- unlike the plain `sepBy` behind `$xs,*`
+    -- splicing -- depends on real column/indentation tracking that synthetic, macro-built
+    -- `Syntax` doesn't carry, so the antiquotation form silently parses as a zero-field
+    -- structure. (Same technique reused below for `App.Links`/`App.links`.)
     --
-    -- * Built as source text and reparsed (`elabCommandFromSource` above) rather than spliced via
-    --   `$[...]*` quotation antiquotations: `structure`'s field list (`structFields`, `Parser/
-    --   Command.lean`) is a `manyIndent`, which -- unlike the plain `sepBy` behind `$xs,*`
-    --   splicing -- depends on real column/indentation tracking that synthetic, macro-built
-    --   `Syntax` doesn't carry, so the antiquotation form silently parses as a zero-field
-    --   structure. Confirmed by a throwaway spike (`lean_diagnostic_messages` against exactly
-    --   this quotation) before falling back to this approach, matching `docs/routing-design-
-    --   plan.md`'s own spike-first methodology.
-    -- * The same technique is reused below (5/6) for `App.Links`/`App.links`.
-    -- * Fields are typed by an already-parsed `List PathSeg` *literal* (`segsSrcFor`), not a
-    --   pattern-string call for the elaborator to reduce -- this is the field
-    --   `Route.get`/`.post`/`.put`/`.delete` (`Route.lean`) are meant to consume: a `List PathSeg`
-    --   already known well-formed, so building a `Route` from it needs no further parsing (and so
-    --   has no failure mode of its own).
+    -- Fields are typed by an already-parsed `List PathSeg` *literal* (`segsSrcFor`), not a
+    -- pattern-string call for the elaborator to reduce, so a `Route` built from a field
+    -- (`Route.get`/`.post`/etc., `Route.lean`) needs no further parsing.
     let patternsTypeIdent := qualifyPlain appId appName `Patterns
     let patternsValIdent := qualifyPlain appId appName `patterns
     let patternFieldsSrc := String.intercalate "\n  " <|
@@ -119,17 +112,10 @@ elab_rules : command
     -- 5/6. `structure App.Links where name : LinkType [PathSeg literal] ...` and
     -- `def App.links : App.Links := { name := linkFor [PathSeg literal], ... }`.
     --
-    -- Same source-text-and-reparse technique as 3/4 above (see that comment for why), plus one
-    -- more wrinkle here:
-    --
-    -- * `LinkType [PathSeg literal]`, not `LinkType App.Patterns.name`: a zero-capture field
-    --   (`toggleAll`, `clearCompleted`, ...) has no argument application to force reduction
-    --   through a *reference* to the `Patterns` field, so real usage (`Todo/Views.lean`'s
-    --   `hxPost := links.toggleAll` against an `Option String` field, via the `Coe String
-    --   (Option String)` instance) failed to typecheck against that form -- caught by building
-    --   `Todo/Links.lean` against this macro for real (`docs/todo-app-plan.md`'s own "verify
-    --   end-to-end, not just typechecked" standard), not by this file's own `#guard`s in
-    --   isolation. Splicing the literal again here (`segsSrcs`, computed once above) sidesteps it.
+    -- Same source-text-and-reparse technique as 3/4 above (see that comment for why). Fields are
+    -- typed by `LinkType [PathSeg literal]`, not `LinkType App.Patterns.name`: a zero-capture
+    -- field has no argument application to force reduction through a *reference* to the
+    -- `Patterns` field, so it must splice the literal (`segsSrcs`, computed once above) directly.
     let linksTypeIdent := qualifyPlain appId appName `Links
     let linksValIdent := qualifyPlain appId appName `links
     let structFieldsSrc := String.intercalate "\n  " <|
