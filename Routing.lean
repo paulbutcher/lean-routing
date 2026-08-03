@@ -20,10 +20,19 @@ directly
 `Route`/`dispatchTable` (`Routing/Route.lean`) bundle a method, pattern,
 and handler into a route table, tried in order.
 
+A `routeTable!` row can also `mount` another `routeTable!`-generated table
+under a literal path prefix (`Routing/RouteTable.lean`), nesting its whole
+`patterns`/`links` shape -- recursively, to whatever depth the mounted
+table itself mounts further tables -- so an app can be composed from
+independently-declared feature modules.
+
 ## Not yet supported
 
 - **Query-string parameters** -- `dispatch` only matches the path.
 - **`CaptureKind` is a closed enum** (`Nat`/`String` only). Whether to open
   it into a typeclass so downstream code can add capture types is
   deferred.
+- **Captured mount prefixes** -- a `mount` prefix must be literal; mounting
+  under a prefix with a `:name:Kind` capture (e.g. per-tenant routes like
+  `/orgs/:orgId:Nat/...`) isn't supported yet.
 -/

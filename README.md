@@ -70,6 +70,31 @@ Use `AppName.links.<name>` anywhere you need a URL for one of your routes, e.g. 
 `AppName.links.user` is a function (`Nat → String`) because its pattern has one capture; a
 pattern with no captures gives a plain `String`.
 
+### Hierarchical routes
+
+A `routeTable!` can `mount` another `routeTable!`-generated table under a literal path prefix,
+nesting its whole `patterns`/`links` shape:
+
+```lean
+routeTable! Blog
+  [ index := "/",
+    post  := "/:slug:String" ]
+
+routeTable! AppName
+  [ index := "/",
+    blog  := mount "/blog" Blog ]
+```
+
+```lean
+#eval AppName.links.blog.index        -- "/blog"
+#eval AppName.links.blog.post "hi"    -- "/blog/hi"
+```
+
+`AppName.patterns.blog.post` is the full prefixed pattern, so it plugs into `Route.get`/etc. the
+same way any other pattern does, and a handler for it needs no special wrapping — a mount prefix
+must be literal (no `:name:Kind` captures), so it never changes a route's required handler type.
+Mounts nest to any depth: a table that itself mounts other tables can be mounted again further up.
+
 ## License
 
 This library is released under the Apache 2.0 license. See the LICENSE
