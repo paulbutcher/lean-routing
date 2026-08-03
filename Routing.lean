@@ -3,6 +3,7 @@ import Routing.Handler
 import Routing.Route
 import Routing.Server
 import Routing.RouteTable
+import Routing.RelativeLink
 
 /-!
 This library attempts to balance low ceremony with static guarantees that
@@ -25,6 +26,16 @@ under a literal path prefix (`Routing/RouteTable.lean`), nesting its whole
 `patterns`/`links` shape -- recursively, to whatever depth the mounted
 table itself mounts further tables -- so an app can be composed from
 independently-declared feature modules.
+
+`Routing.relativeUrl` (`Routing/RelativeLink.lean`) computes a relative
+link between two already-rendered `linkFor`/`.links` paths, letting code
+inside a mounted module self-link using its own unprefixed `.links`
+values regardless of where (or whether) the module ends up mounted --
+prepending a shared literal prefix to both endpoints cancels out of the
+result. `dispatch` (`Routing/Handler.lean`) tolerates a single trailing
+empty path segment once a pattern is otherwise fully matched, so the
+directory-style (`"."`/`".."`) references an upward relative link
+resolves to still reach their target.
 
 ## Not yet supported
 

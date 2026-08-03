@@ -12,6 +12,7 @@ private def userHandler : HandlerType userPattern String :=
 #guard dispatch userPattern userHandler ["posts", "42"] = none          -- literal mismatch
 #guard dispatch userPattern userHandler ["users"] = none                -- too few path segments
 #guard dispatch userPattern userHandler ["users", "42", "extra"] = none -- too many path segments
+#guard dispatch userPattern userHandler ["users", "42", ""] = some "user #42" -- trailing slash
 
 -- Negative-compile regression: a wrong-arity handler against a real
 -- pattern is rejected at compile time.

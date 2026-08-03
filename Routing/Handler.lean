@@ -15,10 +15,18 @@ def HandlerType (segs : List PathSeg) (result : Type) : Type :=
 
 /-- Matches a decoded request path (`List String`, e.g. from
 `RequestTarget.path.toDecodedSegments`) against `segs`, applying `handler`
-to the extracted, typed capture values as it goes. -/
+to the extracted, typed capture values as it goes.
+
+A trailing `""` once `segs` is exhausted matches too: `Std.Http`'s path parser appends an empty
+segment for a request path ending in `/` (e.g. `/todos/7/` decodes to `["todos", "7", ""]`), and a
+route's own pattern never has a trailing slash of its own to match it structurally. Tolerating it
+here means a directory-style relative reference -- e.g. `Routing.relativeUrl`'s `"."`/`".."` case,
+which an RFC 3986-compliant resolver always turns into a trailing-slash URL -- actually reaches its
+target instead of 404ing. -/
 def dispatch {result : Type} :
     (segs : List PathSeg) → HandlerType segs result → List String → Option result
   | [], h, [] => some h
+  | [], h, [""] => some h
   | .lit s :: rest, h, p :: ps => if s == p then dispatch rest h ps else none
   | .capture _ .nat :: rest, h, p :: ps => p.toNat?.bind (fun n => dispatch rest (h n) ps)
   | .capture _ .string :: rest, h, p :: ps => dispatch rest (h p) ps

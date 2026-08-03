@@ -95,6 +95,30 @@ same way any other pattern does, and a handler for it needs no special wrapping 
 must be literal (no `:name:Kind` captures), so it never changes a route's required handler type.
 Mounts nest to any depth: a table that itself mounts other tables can be mounted again further up.
 
+### Relative links
+
+`Routing.relativeUrl current to` builds a relative reference between two already-rendered links,
+so code inside a module can self-link using its own *unprefixed* `.links` — no need to know
+whether, or under what prefix, the module ends up mounted:
+
+```lean
+#eval Routing.relativeUrl Blog.links.index (Blog.links.post "hi")  -- "hi"
+```
+
+This comes out the same whichever prefix `Blog` is mounted under (or none at all), because a
+prefix shared by both endpoints cancels out of the computation:
+
+```lean
+#eval Routing.relativeUrl AppName.links.blog.index (AppName.links.blog.post "hi")  -- "hi", too
+```
+
+Linking to a strict descendant of the current page needs its own segment repeated
+(`relativeUrl "/posts/5" "/posts/5/edit" = "5/edit"`, not `"edit"`) — the standard RFC 3986 rule
+that treats the current page's last segment as a "file", not a directory. Linking *up* to an
+ancestor page renders as a directory reference (`"."`/`".."`), which resolves to a trailing-slash
+URL; `dispatch` tolerates that trailing slash once a pattern is otherwise fully matched, so the
+link still reaches its target.
+
 ## License
 
 This library is released under the Apache 2.0 license. See the LICENSE
