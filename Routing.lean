@@ -3,6 +3,7 @@ import Routing.Handler
 import Routing.Route
 import Routing.Server
 import Routing.RouteTable
+import Routing.RouteMount
 import Routing.RelativeLink
 
 /-!
@@ -21,7 +22,7 @@ directly
 `Route`/`dispatchTable` (`Routing/Route.lean`) bundle a method, pattern,
 and handler into a route table, tried in order.
 
-A `routeTable!` row can also `mount` another `routeTable!`-generated table
+A `route_table` row can also `mount` another `route_table`-generated table
 under a literal path prefix (`Routing/RouteTable.lean`), nesting its whole
 `patterns`/`links` shape -- recursively, to whatever depth the mounted
 table itself mounts further tables -- so an app can be composed from

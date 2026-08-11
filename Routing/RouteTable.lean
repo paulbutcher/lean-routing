@@ -2,18 +2,18 @@ import Lean
 import Routing.Handler
 
 /-!
-`routeTable! App [ name := "pattern", ... ]`: generates, for each row, a field of a generated
+`route_table App [ name := "pattern", ... ]`: generates, for each row, a field of a generated
 `App.Patterns` structure (`List Routing.PathSeg`, the parsed pattern) and the corresponding field
 of `App.patterns`, and a field of a generated `App.Links` structure (`Routing.LinkType` of the
 parsed pattern -- `Handler.lean`) and the corresponding field of `App.links` (built with
 `Routing.linkFor`).
 
-Every pattern is parsed exactly once, right here, at the `routeTable!` row that declares it --
+Every pattern is parsed exactly once, right here, at the `route_table` row that declares it --
 a malformed pattern is a compile error at that row. `App.patterns`, consumed directly by
 `Route.get`/`.post`/etc. (`Route.lean`), is how a route built from this table avoids re-parsing
 (and so re-validating) the same pattern string a second time.
 
-A row can also *mount* another `routeTable!`-generated app under a literal path prefix
+A row can also *mount* another `route_table`-generated app under a literal path prefix
 (`name := mount "prefix" SubApp`), nesting `SubApp`'s whole `Patterns`/`Links` shape --
 recursively, to whatever depth `SubApp` itself mounts further apps -- under `App.patterns.name`/
 `App.links.name`. Prefixes must be literal (no `:name:Kind` captures): `HandlerType`/`LinkType`
@@ -38,7 +38,7 @@ syntax routeTableRows := "[" withoutPosition(routeTableRow,*,?) "]"
 
 /-- See the module docstring. `App` names the generated `App.Patterns`/`App.patterns`/
 `App.Links`/`App.links` declarations. -/
-syntax (name := routeTableCmd) "routeTable!" ident routeTableRows : command
+syntax (name := routeTableCmd) "route_table" ident routeTableRows : command
 
 /-- A row is either a plain pattern (`.leaf`) or a mount of another app's whole table under a
 literal prefix (`.mount`). -/
@@ -49,7 +49,7 @@ private inductive RowKind where
 private def qualifyPlain (src : Syntax) (appName : Name) (suffix : Name) : Ident :=
   mkIdentFrom src (appName ++ suffix)
 
-/-- Parses `src` as a `command` and elaborates it, blaming `ref` (the `routeTable!` invocation) on
+/-- Parses `src` as a `command` and elaborates it, blaming `ref` (the `route_table` invocation) on
 a parse failure. See the "3/4" comment below for why generated commands go through source text
 rather than `Syntax` quotation here. -/
 private def elabCommandFromSource (ref : Syntax) (src : String) : CommandElabM Unit := do
@@ -93,16 +93,16 @@ private def prefixSegsSrcFor (pat : TSyntax `str) : CommandElabM String := do
 
 /-- Resolves `sub` (a `mount` row's app identifier) to its generated `Patterns` structure,
 accounting for the current namespace/opens the same way a plain identifier typed by the user
-would resolve. Fails loudly if `sub` doesn't name a `routeTable!`-generated app, rather than
+would resolve. Fails loudly if `sub` doesn't name a `route_table`-generated app, rather than
 risking `getStructureFields` silently treating a non-structure as having no fields. -/
 private def resolveSubPatterns (sub : Ident) : CommandElabM Name := do
   let patternsId := mkIdentFrom sub (sub.getId ++ `Patterns)
   let name ← resolveGlobalConstNoOverload patternsId
   unless isStructure (← getEnv) name do
-    throwErrorAt sub s!"'{sub.getId}' is not a routeTable!-generated app (no structure '{name}')"
+    throwErrorAt sub s!"'{sub.getId}' is not a route_table-generated app (no structure '{name}')"
   pure name
 
-/-- `some structName` if `field` of `structName` is itself a `routeTable!`-generated `Patterns`-
+/-- `some structName` if `field` of `structName` is itself a `route_table`-generated `Patterns`-
 shaped structure (i.e. `field` came from a `mount` row when `structName`'s table was declared);
 `none` if it's a leaf field (`List Routing.PathSeg`). Reads the field's type off its projection
 function's declared type -- `∀ (self : structName), FieldType` -- rather than the field's *value*,
@@ -180,7 +180,7 @@ private def rowGenFor (env : Environment) (name : Ident) : RowKind → CommandEl
           linksValueSrc := "{ " ++ linkFieldsSrc ++ " }" }
 
 elab_rules : command
-  | `(routeTable! $appId:ident [ $rows,* ]) => do
+  | `(route_table $appId:ident [ $rows,* ]) => do
     let appName := appId.getId
     -- 1. Destructure each row into (name, row kind) -- a plain pattern (`RowKind.leaf`) or a
     -- mount of another app under a literal prefix (`RowKind.mount`).

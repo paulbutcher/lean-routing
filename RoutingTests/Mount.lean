@@ -1,13 +1,14 @@
 import Routing.RouteTable
 import Routing.Route
+import Routing.RouteMount
 
 namespace Routing
 
-routeTable! MountLeafRoutes
+route_table MountLeafRoutes
   [ index := "/",
     item := "/:slug:String" ]
 
-routeTable! MountTest
+route_table MountTest
   [ home := "/",
     blog := mount "/blog" MountLeafRoutes ]
 
@@ -30,14 +31,14 @@ private def blogItemRoute : Route String :=
 -- Mounting nests to arbitrary depth: `MountMiddleRoutes` mounts `MountInnerRoutes` under "/mid"
 -- (alongside a leaf route of its own), and `MountOuterTest` mounts `MountMiddleRoutes` under
 -- "/outer" -- exercising `mountFieldsSrc`'s recursive case (`RouteTable.lean`).
-routeTable! MountInnerRoutes
+route_table MountInnerRoutes
   [ leaf1 := "/leaf1" ]
 
-routeTable! MountMiddleRoutes
+route_table MountMiddleRoutes
   [ innerMount := mount "/mid" MountInnerRoutes,
     ownLeaf := "/own" ]
 
-routeTable! MountOuterTest
+route_table MountOuterTest
   [ midMount := mount "/outer" MountMiddleRoutes ]
 
 #guard MountOuterTest.patterns.midMount.innerMount.leaf1 = [.lit "outer", .lit "mid", .lit "leaf1"]
@@ -51,7 +52,7 @@ routeTable! MountOuterTest
 error: mount prefix must not contain captures (got "/orgs/:orgId:Nat"); captured mount prefixes are not yet supported
 -/
 #guard_msgs in
-routeTable! MountCaptureTest
+route_table MountCaptureTest
   [ bad := mount "/orgs/:orgId:Nat" MountLeafRoutes ]
 
 -- Negative-compile regression: the duplicate-name check (`RouteTable.lean`) applies uniformly
@@ -60,8 +61,53 @@ routeTable! MountCaptureTest
 error: route name 'index' already declared at `index
 -/
 #guard_msgs in
-routeTable! MountDupTest
+route_table MountDupTest
   [ index := "/",
     index := mount "/x" MountLeafRoutes ]
+
+-- `mount_routes` is the `Route`-level analogue of `mount`: routes declared once against a
+-- sub-app's own unprefixed `patterns` are reused unmodified -- only `segs` is rewritten, exactly
+-- mirroring `MountTest.patterns.blog` above.
+private def leafRoutes : List (Route String) :=
+  [ .get MountLeafRoutes.patterns.index (handler := "index"),
+    .get MountLeafRoutes.patterns.item (handler := fun (slug : String) => s!"item {slug}") ]
+
+private def blogMountedRoutes : List (Route String) := mount_routes "/blog" leafRoutes
+
+#guard dispatchTable blogMountedRoutes .get ["blog"] = some "index"
+#guard dispatchTable blogMountedRoutes .get ["blog", "hi"] = some "item hi"
+#guard dispatchTable blogMountedRoutes .get [] = none
+#guard dispatchTable blogMountedRoutes .get ["hi"] = none
+
+-- Nesting is just repeated prefixing and `++` -- no structural recursion needed, unlike `mount`.
+private def innerRoutes : List (Route String) :=
+  [ .get MountInnerRoutes.patterns.leaf1 (handler := "leaf1") ]
+
+private def middleOwnRoutes : List (Route String) :=
+  [ .get MountMiddleRoutes.patterns.ownLeaf (handler := "own") ]
+
+private def middleRoutes : List (Route String) :=
+  mount_routes "/mid" innerRoutes ++ middleOwnRoutes
+
+private def outerRoutes : List (Route String) := mount_routes "/outer" middleRoutes
+
+#guard dispatchTable outerRoutes .get ["outer", "mid", "leaf1"] = some "leaf1"
+#guard dispatchTable outerRoutes .get ["outer", "own"] = some "own"
+
+-- Negative-compile regression: same capture restriction, and same error message, as `mount`
+-- (`mountPrefixSegs`, `RouteMount.lean`).
+/--
+error: mount prefix must not contain captures (got "/orgs/:orgId:Nat"); captured mount prefixes are not yet supported
+-/
+#guard_msgs in
+def badMountRoutes : List (Route String) := mount_routes "/orgs/:orgId:Nat" leafRoutes
+
+-- Negative-compile regression: a malformed prefix pattern is a macro-time error, not a
+-- silently-accepted bad mount.
+/--
+error: invalid route pattern "not-a-valid-pattern"
+-/
+#guard_msgs in
+def badPatternRoutes : List (Route String) := mount_routes "not-a-valid-pattern" leafRoutes
 
 end Routing

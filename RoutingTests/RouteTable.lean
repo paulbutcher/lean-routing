@@ -3,7 +3,7 @@ import Routing.Route
 
 namespace Routing
 
-routeTable! RouteTableTest
+route_table RouteTableTest
   [ index := "/",
     active := "/active",
     edit := "/todos/:id:Nat/edit" ]
@@ -29,7 +29,7 @@ private def editRoute : Route String :=
 error: route name 'index' already declared at `index
 -/
 #guard_msgs in
-routeTable! RouteTableTestDup
+route_table RouteTableTestDup
   [ index := "/",
     index := "/elsewhere" ]
 
@@ -39,7 +39,7 @@ routeTable! RouteTableTestDup
 error: invalid route pattern "not-a-valid-pattern"
 -/
 #guard_msgs in
-routeTable! RouteTableTestInvalid
+route_table RouteTableTestInvalid
   [ bad := "not-a-valid-pattern" ]
 
 end Routing

@@ -20,14 +20,14 @@ structure Route (result : Type) where
   handler : HandlerType segs result
 
 /-- Builds a `Route` straight from already-parsed segments -- no parsing, so no failure mode at
-this call site. `segs` is meant to come from a `routeTable!`-generated `App.Patterns` value
-(`RouteTable.lean`), whose pattern was already validated at the `routeTable!` row that declared
+this call site. `segs` is meant to come from a `route_table`-generated `App.Patterns` value
+(`RouteTable.lean`), whose pattern was already validated at the `route_table` row that declared
 it. -/
 def route (method : Method) (segs : List PathSeg) {result : Type}
     (handler : HandlerType segs result) : Route result :=
   { method, segs, handler }
 
-/-- Per-method aliases for `route`, for `segs` sourced from a `routeTable!`-generated
+/-- Per-method aliases for `route`, for `segs` sourced from a `route_table`-generated
 `App.Patterns` value -- so a route table can write `.get`/`.post`/`.put`/`.delete` (resolved via
 Lean's generalized dot notation against the list's expected `Route result` element type) instead
 of `route .get`/`route .post`/etc. -/

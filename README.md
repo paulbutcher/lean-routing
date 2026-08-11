@@ -23,7 +23,7 @@ git = "https://github.com/paulbutcher/lean-routing.git"
 ```lean
 import Routing
 
-routeTable! AppName
+route_table AppName
   [ index := "/",
     user := "/users/:id:Nat",
     userPost := "/users/:id:Nat/posts/:slug:String" ]
@@ -72,15 +72,15 @@ pattern with no captures gives a plain `String`.
 
 ### Hierarchical routes
 
-A `routeTable!` can `mount` another `routeTable!`-generated table under a literal path prefix,
+A `route_table` can `mount` another `route_table`-generated table under a literal path prefix,
 nesting its whole `patterns`/`links` shape:
 
 ```lean
-routeTable! Blog
+route_table Blog
   [ index := "/",
     post  := "/:slug:String" ]
 
-routeTable! AppName
+route_table AppName
   [ index := "/",
     blog  := mount "/blog" Blog ]
 ```
@@ -94,6 +94,26 @@ routeTable! AppName
 same way any other pattern does, and a handler for it needs no special wrapping — a mount prefix
 must be literal (no `:name:Kind` captures), so it never changes a route's required handler type.
 Mounts nest to any depth: a table that itself mounts other tables can be mounted again further up.
+
+### Hierarchical handlers
+
+`mount_routes "prefix" routes` is the handler-level counterpart: it takes a `List (Route _)` built
+against a sub-app's own *unprefixed* patterns and re-targets it under a literal prefix, so a
+module's handlers can be written once and mounted anywhere:
+
+```lean
+def blogRoutes : List (Route Result) :=
+  [ .get Blog.patterns.index (fun request => Response.ok.text "blog home"),
+    .get Blog.patterns.post (fun (slug : String) request => Response.ok.text s!"post {slug}") ]
+
+def app : StatelessHandler :=
+  ( [ .get AppName.patterns.index (fun request => Response.ok.text "home") ] ++
+    mount_routes "/blog" blogRoutes
+  ) |> toHandler
+```
+
+Like `mount`, no handler wrapping is needed for the prefix. Unlike `mount`, nesting is just
+repeated `mount_routes` + `++` — routes are already a flat list, so there's no structure to walk.
 
 ### Relative links
 

@@ -2,7 +2,7 @@ import Routing.Route
 
 namespace Routing
 
--- Stands in for a `routeTable!`-generated `App.patterns` field.
+-- Stands in for a `route_table`-generated `App.patterns` field.
 private def userSegs : List PathSeg := [.lit "users", .capture "id" .nat]
 
 private def testRoutes : List (Route String) :=
