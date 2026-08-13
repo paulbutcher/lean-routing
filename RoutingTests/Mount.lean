@@ -79,6 +79,13 @@ private def blogMountedRoutes : List (Route String) := mount_routes "/blog" leaf
 #guard dispatchTable blogMountedRoutes .get [] = none
 #guard dispatchTable blogMountedRoutes .get ["hi"] = none
 
+-- A mounted route reports its *prefixed* pattern, not the unprefixed one its handler was
+-- declared against: `mount_routes` rewrote `segs` itself, so there's nothing left to re-apply.
+#guard matchTable blogMountedRoutes .get ["blog"] = some ({ method := .get, segs := [.lit "blog"] }, "index")
+#guard matchTable blogMountedRoutes .get ["blog", "hi"]
+     = some ({ method := .get, segs := [.lit "blog", .capture "slug" .string] }, "item hi")
+#guard matchTable blogMountedRoutes .get ["hi"] = none
+
 -- Nesting is just repeated prefixing and `++` -- no structural recursion needed, unlike `mount`.
 private def innerRoutes : List (Route String) :=
   [ .get MountInnerRoutes.patterns.leaf1 (handler := "leaf1") ]
@@ -93,6 +100,13 @@ private def outerRoutes : List (Route String) := mount_routes "/outer" middleRou
 
 #guard dispatchTable outerRoutes .get ["outer", "mid", "leaf1"] = some "leaf1"
 #guard dispatchTable outerRoutes .get ["outer", "own"] = some "own"
+
+-- Both mount levels' prefixes are present in the reported pattern.
+#guard matchTable outerRoutes .get ["outer", "mid", "leaf1"]
+     = some ({ method := .get, segs := [.lit "outer", .lit "mid", .lit "leaf1"] }, "leaf1")
+#guard matchTable outerRoutes .get ["outer", "own"]
+     = some ({ method := .get, segs := [.lit "outer", .lit "own"] }, "own")
+#guard matchTable outerRoutes .get ["mid", "leaf1"] = none
 
 -- Negative-compile regression: same capture restriction, and same error message, as `mount`
 -- (`mountPrefixSegs`, `RouteMount.lean`).

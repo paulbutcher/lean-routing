@@ -20,7 +20,11 @@ correctly typed via `CaptureKind.type`), using Lean's dependent types
 directly
 
 `Route`/`dispatchTable` (`Routing/Route.lean`) bundle a method, pattern,
-and handler into a route table, tried in order.
+and handler into a route table, tried in order. `matchTable` is
+`dispatchTable` plus the identity of the route that matched
+(`MatchedRoute`); `toHandler` (`Routing/Server.lean`) publishes that on the
+request it passes down *and* on the response it returns, since a middleware
+wrapping the router has only the response to read it from.
 
 A `route_table` row can also `mount` another `route_table`-generated table
 under a literal path prefix (`Routing/RouteTable.lean`), nesting its whole

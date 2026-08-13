@@ -47,6 +47,18 @@ def Route.delete (segs : List PathSeg) {result : Type} (handler : HandlerType se
     Route result :=
   route .delete segs handler
 
+/-- Which route a dispatch matched. Carries the matched `Route`'s `method` and `segs` rather than
+the `Route` itself: `segs` is the low-cardinality route *template* that identifies the endpoint
+(what an OpenTelemetry `http.route` attribute wants, for instance), whereas the `Route` would also
+hand out its `handler`, which is the router's business alone.
+
+`segs` has any mount prefixes already applied, because `mount_routes`/`mount` rewrite a route's
+own `segs` field (`RouteMount.lean`) rather than prefixing at dispatch time. -/
+structure MatchedRoute where
+  method : Method
+  segs : List PathSeg
+deriving Repr, DecidableEq, TypeName
+
 /-- Matches one route against an incoming method and decoded path,
 producing the handler's result applied to any extracted captures. `none`
 if the method doesn't match, or if `dispatch` rejects the path (literal
@@ -60,5 +72,20 @@ def Route.tryDispatch (r : Route result) (method : Method) (path : List String) 
 def dispatchTable (routes : List (Route result)) (method : Method) (path : List String) :
     Option result :=
   routes.findSome? (Route.tryDispatch · method path)
+
+/-- `Route.tryDispatch`, additionally reporting *which* route matched. -/
+def Route.tryMatch (r : Route result) (method : Method) (path : List String) :
+    Option (MatchedRoute × result) :=
+  (r.tryDispatch method path).map (fun res => ({ method := r.method, segs := r.segs }, res))
+
+/-- `dispatchTable`, additionally reporting which route matched -- the only place that fact is
+available, since a `result` on its own says nothing about the pattern that produced it.
+
+A separate entry point rather than a redefinition of `dispatchTable` in terms of this one: the two
+share their first-match-wins order but not their type, and `dispatchTable`'s existing callers
+should keep the definition they already unfold. Any change to matching order belongs in both. -/
+def matchTable (routes : List (Route result)) (method : Method) (path : List String) :
+    Option (MatchedRoute × result) :=
+  routes.findSome? (Route.tryMatch · method path)
 
 end Routing

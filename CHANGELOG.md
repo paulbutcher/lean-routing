@@ -1,8 +1,10 @@
 # Changelog
 
-## [0.3.0] - 2026-08-11
+## [Unreleased]
 
-### Added
+Store matched route in both request and response.
+
+## [0.3.0] - 2026-08-11
 
 - Hierarchical handler construction
 - Fit better with Lean idiomatic naming conventions

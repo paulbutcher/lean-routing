@@ -115,6 +115,19 @@ def app : StatelessHandler :=
 Like `mount`, no handler wrapping is needed for the prefix. Unlike `mount`, nesting is just
 repeated `mount_routes` + `++` — routes are already a flat list, so there's no structure to walk.
 
+### Which route matched?
+
+The matched route is stored in the `extensions` of both the request and the response. Read it
+back with `Routing.matchedRoute?`:
+
+```lean
+def handler (request : Request Body.Stream) : ContextAsync (Response Body.Any) := do
+  let response ← inner request
+  match Routing.matchedRoute? response.extensions with
+  | some matched => ...   -- matched.segs = [.lit "users", .capture "id" .nat]
+  | none => ...           -- nothing matched; this is the 404
+```
+
 ### Relative links
 
 `Routing.relativeUrl current to` builds a relative reference between two already-rendered links,
