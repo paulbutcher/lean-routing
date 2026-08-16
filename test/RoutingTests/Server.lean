@@ -1,3 +1,7 @@
+/-
+Copyright (c) 2026 Paul Butcher. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
 import Routing.Server
 
 /-!
@@ -30,8 +34,10 @@ private def serverRoutes : List (Route Result) :=
 
 private def runRequest (target : String) : IO (Option MatchedRoute × Option SeenByHandler) :=
   Async.block <| ContextAsync.run do
+    let some uri := RequestTarget.parse? target
+      | throw (IO.userError s!"test target {target.quote} is not a valid request target")
     let body ← Body.empty
-    let request := (Request.get (RequestTarget.parse! target)).body body
+    let request := (Request.get uri).body body
     let response ← (toHandler serverRoutes).onRequest request
     return (matchedRoute? response.extensions, response.extensions.get SeenByHandler)
 

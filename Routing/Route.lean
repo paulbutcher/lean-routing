@@ -1,3 +1,7 @@
+/-
+Copyright (c) 2026 Paul Butcher. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
 import Std.Http.Data.Method
 import Routing.Handler
 
@@ -11,15 +15,15 @@ namespace Routing
 
 open Std.Http (Method)
 
-/-- An HTTP method, a path pattern (as already-parsed segments,
-so `HandlerType segs result` -- and therefore `handler`'s arity/types --
-is checked at the point the route is built), and its handler. -/
+/-- An HTTP method, a path pattern (as already-parsed segments, so `HandlerType segs result`,
+and therefore `handler`'s arity and types, is checked at the point the route is built), and its
+handler. -/
 structure Route (result : Type) where
   method : Method
   segs : List PathSeg
   handler : HandlerType segs result
 
-/-- Builds a `Route` straight from already-parsed segments -- no parsing, so no failure mode at
+/-- Builds a `Route` straight from already-parsed segments; no parsing, so no failure mode at
 this call site. `segs` is meant to come from a `route_table`-generated `App.Patterns` value
 (`RouteTable.lean`), whose pattern was already validated at the `route_table` row that declared
 it. -/
@@ -28,7 +32,7 @@ def route (method : Method) (segs : List PathSeg) {result : Type}
   { method, segs, handler }
 
 /-- Per-method aliases for `route`, for `segs` sourced from a `route_table`-generated
-`App.Patterns` value -- so a route table can write `.get`/`.post`/`.put`/`.delete` (resolved via
+`App.Patterns` value, so a route table can write `.get`/`.post`/`.put`/`.delete` (resolved via
 Lean's generalized dot notation against the list's expected `Route result` element type) instead
 of `route .get`/`route .post`/etc. -/
 def Route.get (segs : List PathSeg) {result : Type} (handler : HandlerType segs result) :
@@ -62,7 +66,7 @@ deriving Repr, DecidableEq, TypeName
 /-- Matches one route against an incoming method and decoded path,
 producing the handler's result applied to any extracted captures. `none`
 if the method doesn't match, or if `dispatch` rejects the path (literal
-mismatch, mistyped capture, or arity mismatch -- `Handler.lean`). -/
+mismatch, mistyped capture, or arity mismatch; `Handler.lean`). -/
 def Route.tryDispatch (r : Route result) (method : Method) (path : List String) :
     Option result :=
   if r.method == method then dispatch r.segs r.handler path else none
@@ -78,7 +82,7 @@ def Route.tryMatch (r : Route result) (method : Method) (path : List String) :
     Option (MatchedRoute × result) :=
   (r.tryDispatch method path).map (fun res => ({ method := r.method, segs := r.segs }, res))
 
-/-- `dispatchTable`, additionally reporting which route matched -- the only place that fact is
+/-- `dispatchTable`, additionally reporting which route matched; the only place that fact is
 available, since a `result` on its own says nothing about the pattern that produced it.
 
 A separate entry point rather than a redefinition of `dispatchTable` in terms of this one: the two

@@ -1,9 +1,13 @@
+/-
+Copyright (c) 2026 Paul Butcher. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
 import Lean
 import Routing.Route
 
 /-!
 `mount_routes "prefix" routes`: the `Route`-level analogue of `route_table`'s `mount` row
-(`RouteTable.lean`) -- prefixes every route in `routes` (a `List (Route result)`, typically built
+(`RouteTable.lean`). It prefixes every route in `routes` (a `List (Route result)`, typically built
 against a sub-app's own, unprefixed `route_table`-generated `patterns`) with `prefix`'s literal
 segments, for splicing into a parent app's route list.
 
@@ -13,12 +17,11 @@ associates freely (`mount_routes "/outer" (mount_routes "/mid" innerRoutes ++ ow
 
 No handler-level glue is needed either: `HandlerType` (`Handler.lean`) skips over `.lit` segments
 without adding an argument, so a handler built against the sub-app's own unprefixed pattern already
-has exactly the type needed once prefixed -- only each route's `segs` field actually changes.
+has exactly the type needed once prefixed; only each route's `segs` field actually changes.
 Lean accepts the unchanged `handler` field by straight reduction: the prefix's `.lit` segments are
 literal constructors sitting right there in the generated term (not hidden behind an opaque
 variable), so `HandlerType (prefix ++ segs) result` reduces to `HandlerType segs result` for any
-`segs`, without a cast or proof -- the same reason `Mount.lean`'s mounted-route test needs no extra
-wrapping for its handler.
+`segs`, without a cast or proof.
 -/
 
 namespace Routing
@@ -30,8 +33,9 @@ private def segTerm : PathSeg → MacroM (TSyntax `term)
   | .capture name .nat => `(Routing.PathSeg.capture $(quote name) .nat)
   | .capture name .string => `(Routing.PathSeg.capture $(quote name) .string)
 
-/-- Parses `pat` into segments for a mount prefix, rejecting captures -- same restriction (and same
-error message) as `route_table`'s `mount` row; see `prefixSegsSrcFor`, `RouteTable.lean`. -/
+/-- Parses `pat` into segments for a mount prefix, rejecting captures: the same restriction, and
+the same error message, as `route_table`'s `mount` row; see `prefixSegsSrcFor`,
+`RouteTable.lean`. -/
 private def mountPrefixSegs (pat : TSyntax `str) : MacroM (List PathSeg) := do
   match parsePattern pat.getString with
   | none => Macro.throwErrorAt pat s!"invalid route pattern {pat.getString.quote}"

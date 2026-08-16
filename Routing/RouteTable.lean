@@ -1,3 +1,7 @@
+/-
+Copyright (c) 2026 Paul Butcher. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
 import Lean
 import Routing.Handler
 
@@ -5,21 +9,21 @@ import Routing.Handler
 `route_table App [ name := "pattern", ... ]`: generates, for each row, a field of a generated
 `App.Patterns` structure (`List Routing.PathSeg`, the parsed pattern) and the corresponding field
 of `App.patterns`, and a field of a generated `App.Links` structure (`Routing.LinkType` of the
-parsed pattern -- `Handler.lean`) and the corresponding field of `App.links` (built with
+parsed pattern; `Handler.lean`) and the corresponding field of `App.links` (built with
 `Routing.linkFor`).
 
-Every pattern is parsed exactly once, right here, at the `route_table` row that declares it --
+Every pattern is parsed exactly once, right here, at the `route_table` row that declares it, so
 a malformed pattern is a compile error at that row. `App.patterns`, consumed directly by
 `Route.get`/`.post`/etc. (`Route.lean`), is how a route built from this table avoids re-parsing
 (and so re-validating) the same pattern string a second time.
 
 A row can also *mount* another `route_table`-generated app under a literal path prefix
-(`name := mount "prefix" SubApp`), nesting `SubApp`'s whole `Patterns`/`Links` shape --
-recursively, to whatever depth `SubApp` itself mounts further apps -- under `App.patterns.name`/
+(`name := mount "prefix" SubApp`), nesting `SubApp`'s whole `Patterns`/`Links` shape,
+recursively, to whatever depth `SubApp` itself mounts further apps, under `App.patterns.name`/
 `App.links.name`. Prefixes must be literal (no `:name:Kind` captures): `HandlerType`/`LinkType`
 only add a function arrow for `.capture` segments, so a literal prefix leaves a mounted route's
-required handler type unchanged from what it would be for the un-mounted pattern -- no glue code
-needed at the call site that builds the actual `Route`.
+required handler type unchanged from what it would be for the un-mounted pattern, so no glue code
+is needed at the call site that builds the actual `Route`.
 -/
 
 namespace Routing
@@ -30,10 +34,9 @@ declare_syntax_cat routeTableRow
 syntax ident ":=" str : routeTableRow
 syntax ident ":=" "mount" str ident : routeTableRow
 
-/-- The bracketed, comma-separated row list, factored out into its own named parser (rather than
-inlined into `routeTableCmd` below) because the `,*,?` sepBy-with-optional-trailing-comma sugar
-only elaborates inside a `syntax name := ...` alias, matching the same shape core uses for e.g.
-`rwRuleSeq` (`Init/Tactics.lean`). -/
+/-- Factored out into its own named parser, rather than inlined into `routeTableCmd` below, because
+the `,*,?` trailing-comma sugar only elaborates inside a `syntax name := ...` alias. Same shape core
+uses for `rwRuleSeq` (`Init/Tactics.lean`). -/
 syntax routeTableRows := "[" withoutPosition(routeTableRow,*,?) "]"
 
 /-- See the module docstring. `App` names the generated `App.Patterns`/`App.patterns`/
@@ -67,7 +70,7 @@ private def segSrc : PathSeg → String
   | .capture name .string => s!"Routing.PathSeg.capture {name.quote} .string"
 
 /-- Parses `pat`'s string value with the real `Routing.parsePattern` (so this can never drift from
-what `Main.lean`'s dispatch table itself accepts). `throwErrorAt pat` on a malformed pattern
+what `dispatch` itself accepts). `throwErrorAt pat` on a malformed pattern
 directly: this runs in `CommandElabM`, building source text for codegen rather than elaborating an
 object-level term, so plain `parsePattern` plus an explicit match is the natural way to get
 "malformed pattern is a macro-time elaboration error" here. -/
@@ -105,7 +108,7 @@ private def resolveSubPatterns (sub : Ident) : CommandElabM Name := do
 /-- `some structName` if `field` of `structName` is itself a `route_table`-generated `Patterns`-
 shaped structure (i.e. `field` came from a `mount` row when `structName`'s table was declared);
 `none` if it's a leaf field (`List Routing.PathSeg`). Reads the field's type off its projection
-function's declared type -- `∀ (self : structName), FieldType` -- rather than the field's *value*,
+function's declared type (`∀ (self : structName), FieldType`) rather than the field's *value*,
 since this only needs to classify the shape, not evaluate anything. -/
 private def mountedFieldStruct? (env : Environment) (structName field : Name) :
     CommandElabM (Option Name) := do
@@ -124,29 +127,38 @@ private def mountedFieldStruct? (env : Environment) (structName field : Name) :
   else
     throwError "internal error: field '{field}' has unrecognized type head '{head}'"
 
-/-- Recursively walks `structName` (a `Patterns`-shaped structure, reachable via `accessSrc` --
-Lean source text for a value of that type, e.g. `"BlogRoutes.patterns"`), building the
+/-- How deeply `mount` rows may nest. The walk below needs some bound to be a total function, and
+mount chains are short by construction: each level is a separately-declared feature module. -/
+private def maxMountDepth : Nat := 64
+
+/-- Recursively walks `structName` (a `Patterns`-shaped structure, reachable via `accessSrc`, Lean
+source text for a value of that type, e.g. `"BlogRoutes.patterns"`), building the
 `field := ..., ...` source for both the prefixed `Patterns` value and the corresponding `Links`
 value. Recurses into fields that are themselves mounted sub-tables (`mountedFieldStruct?`), so a
-mount nests to whatever depth the sub-table itself nests -- `prefixSegsSrc` is the same at every
+mount nests to whatever depth the sub-table itself nests; `prefixSegsSrc` is the same at every
 depth, since a mount's prefix applies to everything under it. Links values are computed from the
 *Patterns* side (`Routing.linkFor` applied to the prefixed segs), same as a leaf row does; there's
 no pre-built link function to unwrap. -/
-private partial def mountFieldsSrc (env : Environment) (structName : Name) (accessSrc : String)
+private def mountFieldsSrc (env : Environment) (fuel : Nat) (structName : Name) (accessSrc : String)
     (prefixSegsSrc : String) : CommandElabM (String × String) := do
-  let mut patFields : Array String := #[]
-  let mut linkFields : Array String := #[]
-  for f in getStructureFields env structName do
-    let childAccessSrc := s!"{accessSrc}.{f}"
-    match ← mountedFieldStruct? env structName f with
-    | none =>
-        patFields := patFields.push s!"{f} := {prefixSegsSrc} ++ {childAccessSrc}"
-        linkFields := linkFields.push s!"{f} := Routing.linkFor ({prefixSegsSrc} ++ {childAccessSrc})"
-    | some nestedStructName =>
-        let (nestedPat, nestedLink) ← mountFieldsSrc env nestedStructName childAccessSrc prefixSegsSrc
-        patFields := patFields.push (s!"{f} := " ++ "{ " ++ nestedPat ++ " }")
-        linkFields := linkFields.push (s!"{f} := " ++ "{ " ++ nestedLink ++ " }")
-  pure (String.intercalate ", " patFields.toList, String.intercalate ", " linkFields.toList)
+  match fuel with
+  | 0 => throwError "mounted route tables nest more than {maxMountDepth} levels deep at '{structName}'"
+  | fuel + 1 =>
+    let mut patFields : Array String := #[]
+    let mut linkFields : Array String := #[]
+    for f in getStructureFields env structName do
+      let childAccessSrc := s!"{accessSrc}.{f}"
+      match ← mountedFieldStruct? env structName f with
+      | none =>
+          patFields := patFields.push s!"{f} := {prefixSegsSrc} ++ {childAccessSrc}"
+          linkFields := linkFields.push s!"{f} := Routing.linkFor ({prefixSegsSrc} ++ {childAccessSrc})"
+      | some nestedStructName =>
+          let (nestedPat, nestedLink) ←
+            mountFieldsSrc env fuel nestedStructName childAccessSrc prefixSegsSrc
+          patFields := patFields.push (s!"{f} := " ++ "{ " ++ nestedPat ++ " }")
+          linkFields := linkFields.push (s!"{f} := " ++ "{ " ++ nestedLink ++ " }")
+    pure (String.intercalate ", " patFields.toList, String.intercalate ", " linkFields.toList)
+termination_by fuel
 
 /-- One row's generated field: its `Patterns`/`Links` field type and value, as Lean source text.
 Computed once per row (`rowGenFor`), reused below by both `Patterns` (3/4) and `Links` (5/6). -/
@@ -171,7 +183,7 @@ private def rowGenFor (env : Environment) (name : Ident) : RowKind → CommandEl
       let subPatterns ← resolveSubPatterns sub
       let subApp := subPatterns.getPrefix
       let (patFieldsSrc, linkFieldsSrc) ←
-        mountFieldsSrc env subPatterns s!"{subApp}.patterns" prefixSegsSrc
+        mountFieldsSrc env maxMountDepth subPatterns s!"{subApp}.patterns" prefixSegsSrc
       pure
         { name
           patternsFieldTypeSrc := toString subPatterns
@@ -182,7 +194,7 @@ private def rowGenFor (env : Environment) (name : Ident) : RowKind → CommandEl
 elab_rules : command
   | `(route_table $appId:ident [ $rows,* ]) => do
     let appName := appId.getId
-    -- 1. Destructure each row into (name, row kind) -- a plain pattern (`RowKind.leaf`) or a
+    -- 1. Destructure each row into (name, row kind): a plain pattern (`RowKind.leaf`) or a
     -- mount of another app under a literal prefix (`RowKind.mount`).
     let entries ← rows.getElems.mapM fun row => do
       match row with
@@ -191,7 +203,7 @@ elab_rules : command
           pure (name, RowKind.mount prefixPat sub)
       | _ => throwUnsupportedSyntax
 
-    -- 2. Reject a name declared twice -- each name denotes exactly one pattern or mount,
+    -- 2. Reject a name declared twice; each name denotes exactly one pattern or mount,
     -- regardless of row kind.
     let mut seen : Std.HashMap Name Syntax := {}
     for (name, _) in entries do
@@ -200,7 +212,7 @@ elab_rules : command
       seen := seen.insert name.getId name
 
     -- Compute each row's field type/value source once here (`rowGenFor`), reused below by both
-    -- `Patterns` (3/4) and `Links` (5/6) -- rather than each recomputing it separately.
+    -- `Patterns` (3/4) and `Links` (5/6), rather than each recomputing it separately.
     let env ← getEnv
     let rowGens ← entries.mapM fun (name, kind) => rowGenFor env name kind
 
@@ -208,16 +220,15 @@ elab_rules : command
     -- `def App.patterns : App.Patterns := { name := [PathSeg literal], ... }`.
     --
     -- Built as source text and reparsed (`elabCommandFromSource` above) rather than spliced via
-    -- `$[...]*` quotation antiquotations: `structure`'s field list (`structFields`, `Parser/
-    -- Command.lean`) is a `manyIndent`, which -- unlike the plain `sepBy` behind `$xs,*`
-    -- splicing -- depends on real column/indentation tracking that synthetic, macro-built
-    -- `Syntax` doesn't carry, so the antiquotation form silently parses as a zero-field
-    -- structure. (Same technique reused below for `App.Links`/`App.links`.)
+    -- `$[...]*` antiquotations: `structure`'s field list (`structFields`, `Parser/Command.lean`)
+    -- is a `manyIndent`, which depends on column tracking that synthetic `Syntax` doesn't carry,
+    -- so the antiquotation form silently parses as a zero-field structure. (Same technique reused
+    -- below for `App.Links`/`App.links`.)
     --
     -- A leaf row's field is typed by an already-parsed `List PathSeg` *literal* (`segsSrcFor`),
     -- not a pattern-string call for the elaborator to reduce, so a `Route` built from a field
     -- (`Route.get`/`.post`/etc., `Route.lean`) needs no further parsing. A mount row's field
-    -- reuses the sub-app's own `Patterns` structure type (`rowGenFor`'s `.mount` case) -- a
+    -- reuses the sub-app's own `Patterns` structure type (`rowGenFor`'s `.mount` case): a
     -- literal prefix never changes a `Patterns` field's type, only its value.
     let patternsTypeIdent := qualifyPlain appId appName `Patterns
     let patternsValIdent := qualifyPlain appId appName `patterns

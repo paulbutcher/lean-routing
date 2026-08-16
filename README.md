@@ -1,7 +1,7 @@
 # Routing
 
 A typed HTTP router for Lean 4 / [`Std.Http`](https://leanprover-community.github.io/mathlib4_docs/Std/Http.html). Route
-patterns like `"/users/:id:Nat"` determine the exact type your handler must have — a
+patterns like `"/users/:id:Nat"` determine the exact type your handler must have; a
 wrong-arity or wrong-type handler is a compile error, not a runtime bug.
 
 See: [Formally verified CRUD](https://paulbutcher.com/lean2.html).
@@ -29,7 +29,7 @@ route_table AppName
     userPost := "/users/:id:Nat/posts/:slug:String" ]
 ```
 
-This is a macro which parses the route specifications and generates `AppName.patterns` (the parsed patterns, for step 2) and `AppName.links` (link-building functions — see below).
+This is a macro which parses the route specifications and generates `AppName.patterns` (the parsed patterns, for step 2) and `AppName.links` (link-building functions, described below).
 
 ### 2. Combine route handlers into an application
 
@@ -91,7 +91,7 @@ route_table AppName
 ```
 
 `AppName.patterns.blog.post` is the full prefixed pattern, so it plugs into `Route.get`/etc. the
-same way any other pattern does, and a handler for it needs no special wrapping — a mount prefix
+same way any other pattern does, and a handler for it needs no special wrapping: a mount prefix
 must be literal (no `:name:Kind` captures), so it never changes a route's required handler type.
 Mounts nest to any depth: a table that itself mounts other tables can be mounted again further up.
 
@@ -113,7 +113,7 @@ def app : StatelessHandler :=
 ```
 
 Like `mount`, no handler wrapping is needed for the prefix. Unlike `mount`, nesting is just
-repeated `mount_routes` + `++` — routes are already a flat list, so there's no structure to walk.
+repeated `mount_routes` + `++`; routes are already a flat list, so there's no structure to walk.
 
 ### Which route matched?
 
@@ -131,7 +131,7 @@ def handler (request : Request Body.Stream) : ContextAsync (Response Body.Any) :
 ### Relative links
 
 `Routing.relativeUrl current to` builds a relative reference between two already-rendered links,
-so code inside a module can self-link using its own *unprefixed* `.links` — no need to know
+so code inside a module can self-link using its own *unprefixed* `.links`, with no need to know
 whether, or under what prefix, the module ends up mounted:
 
 ```lean
@@ -146,7 +146,7 @@ prefix shared by both endpoints cancels out of the computation:
 ```
 
 Linking to a strict descendant of the current page needs its own segment repeated
-(`relativeUrl "/posts/5" "/posts/5/edit" = "5/edit"`, not `"edit"`) — the standard RFC 3986 rule
+(`relativeUrl "/posts/5" "/posts/5/edit" = "5/edit"`, not `"edit"`); that is the standard RFC 3986 rule
 that treats the current page's last segment as a "file", not a directory. Linking *up* to an
 ancestor page renders as a directory reference (`"."`/`".."`), which resolves to a trailing-slash
 URL; `dispatch` tolerates that trailing slash once a pattern is otherwise fully matched, so the

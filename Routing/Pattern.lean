@@ -1,11 +1,11 @@
-/-!
-Route pattern strings (`"/users/:id:Nat/posts/:slug:String"`) parsed into
-`List PathSeg`.
+/-
+Copyright (c) 2026 Paul Butcher. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
 -/
 
 namespace Routing
 
-/-- The two capture types currently supported. This might become a typeclass some day -/
+/-- The capture types a route pattern can name. -/
 inductive CaptureKind where
   | nat
   | string
@@ -32,24 +32,13 @@ deriving Repr, DecidableEq
 
 /-- Renders a single segment back to its pattern-string spelling. Built
 directly from `List Char` (not string interpolation) so the round-trip
-proof (`parsePattern_renderPattern`, `RoutingTests/Pattern.lean`) can
+proof (`parsePattern_renderPattern`, `test/RoutingTests/Pattern.lean`) can
 reason about it structurally. -/
 def PathSeg.toString (seg : PathSeg) : String :=
   match seg with
   | .lit s => s
   | .capture name kind =>
       String.ofList (':' :: name.toList ++ ':' :: kind.name.toList)
-
-/-- A segment is well-formed as a *renderable* pattern segment when it
-doesn't contain characters that would be re-parsed as a different
-structure: no `/` (would split into more segments), and -- for `lit` -- no
-leading `:` (would be re-parsed as a capture); for `capture`, no `:` in the
-name (would confuse the name/kind split). This is exactly the
-precondition `parsePattern_renderPattern` (`RoutingTests/Pattern.lean`) needs;
-routes built by hand from ordinary identifiers naturally satisfy it. -/
-def PathSeg.WellFormed : PathSeg → Prop
-  | .lit s => s ≠ "" ∧ (∀ c ∈ s.toList, c ≠ '/') ∧ s.toList.head? ≠ some ':'
-  | .capture name _ => name ≠ "" ∧ (∀ c ∈ name.toList, c ≠ '/' ∧ c ≠ ':')
 
 /-- Renders a full pattern (list of segments) back to its `"/"`-prefixed
 source form, e.g. `[.lit "users", .capture "id" .nat] ↦ "/users/:id:Nat"`.

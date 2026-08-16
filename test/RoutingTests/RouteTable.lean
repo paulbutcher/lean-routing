@@ -1,3 +1,7 @@
+/-
+Copyright (c) 2026 Paul Butcher. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
 import Routing.RouteTable
 import Routing.Route
 
@@ -15,7 +19,7 @@ route_table RouteTableTest
 #guard RouteTableTest.links.active = "/active"
 #guard RouteTableTest.links.edit 7 = "/todos/7/edit"
 
--- A route built from `App.patterns` needs no pattern-string parsing of its own -- `HandlerType`
+-- A route built from `App.patterns` needs no pattern-string parsing of its own; `HandlerType`
 -- is computed straight from the already-parsed segments.
 private def editRoute : Route String :=
   .get RouteTableTest.patterns.edit (handler := fun (id : Nat) => s!"edit #{id}")

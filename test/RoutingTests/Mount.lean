@@ -1,3 +1,7 @@
+/-
+Copyright (c) 2026 Paul Butcher. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
 import Routing.RouteTable
 import Routing.Route
 import Routing.RouteMount
@@ -30,7 +34,7 @@ private def blogItemRoute : Route String :=
 
 -- Mounting nests to arbitrary depth: `MountMiddleRoutes` mounts `MountInnerRoutes` under "/mid"
 -- (alongside a leaf route of its own), and `MountOuterTest` mounts `MountMiddleRoutes` under
--- "/outer" -- exercising `mountFieldsSrc`'s recursive case (`RouteTable.lean`).
+-- "/outer", exercising `mountFieldsSrc`'s recursive case (`RouteTable.lean`).
 route_table MountInnerRoutes
   [ leaf1 := "/leaf1" ]
 
@@ -47,7 +51,7 @@ route_table MountOuterTest
 #guard MountOuterTest.links.midMount.ownLeaf = "/outer/own"
 
 -- Negative-compile regression: a mount prefix with a capture is a command-time error
--- (`prefixSegsSrcFor`, `RouteTable.lean`) -- captured mount prefixes aren't supported yet.
+-- (`prefixSegsSrcFor`, `RouteTable.lean`); mount prefixes must be literal.
 /--
 error: mount prefix must not contain captures (got "/orgs/:orgId:Nat"); captured mount prefixes are not yet supported
 -/
@@ -66,7 +70,7 @@ route_table MountDupTest
     index := mount "/x" MountLeafRoutes ]
 
 -- `mount_routes` is the `Route`-level analogue of `mount`: routes declared once against a
--- sub-app's own unprefixed `patterns` are reused unmodified -- only `segs` is rewritten, exactly
+-- sub-app's own unprefixed `patterns` are reused unmodified; only `segs` is rewritten, exactly
 -- mirroring `MountTest.patterns.blog` above.
 private def leafRoutes : List (Route String) :=
   [ .get MountLeafRoutes.patterns.index (handler := "index"),
@@ -86,7 +90,7 @@ private def blogMountedRoutes : List (Route String) := mount_routes "/blog" leaf
      = some ({ method := .get, segs := [.lit "blog", .capture "slug" .string] }, "item hi")
 #guard matchTable blogMountedRoutes .get ["hi"] = none
 
--- Nesting is just repeated prefixing and `++` -- no structural recursion needed, unlike `mount`.
+-- Nesting is just repeated prefixing and `++`; no structural recursion needed, unlike `mount`.
 private def innerRoutes : List (Route String) :=
   [ .get MountInnerRoutes.patterns.leaf1 (handler := "leaf1") ]
 

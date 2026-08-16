@@ -1,3 +1,7 @@
+/-
+Copyright (c) 2026 Paul Butcher. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
 import Std.Http.Server
 import Routing.Route
 
@@ -14,7 +18,7 @@ def defaultNotFound : Result :=
   fun _request => Response.notFound.text "Not Found"
 
 /-- Reads back the `MatchedRoute` `toHandler` published, from a request's or a response's
-`extensions`. `none` means no route matched -- absence is the signal, so a 404 is distinguishable
+`extensions`. `none` means no route matched; absence is the signal, so a 404 is distinguishable
 from a match rather than reported as an empty or guessed pattern. -/
 def matchedRoute? (extensions : Extensions) : Option MatchedRoute :=
   extensions.get MatchedRoute

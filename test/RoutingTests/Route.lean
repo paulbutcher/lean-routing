@@ -1,3 +1,7 @@
+/-
+Copyright (c) 2026 Paul Butcher. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
 import Routing.Route
 
 namespace Routing
@@ -23,7 +27,7 @@ private def testRoutes : List (Route String) :=
 #guard dispatchTable testRoutes .get ["users", "nope"] = none
 #guard dispatchTable testRoutes .get ["missing"] = none
 
--- `matchTable` returns what `dispatchTable` does, plus the pattern that produced it -- for a
+-- `matchTable` returns what `dispatchTable` does, plus the pattern that produced it: for a
 -- static route, for a capture of each `CaptureKind`, and (with the method, which is what
 -- distinguishes these four) for every method sharing one pattern.
 #guard matchTable testRoutes .get [] = some ({ method := .get, segs := [] }, "home")
@@ -38,7 +42,7 @@ private def testRoutes : List (Route String) :=
 #guard (matchTable testRoutes .get ["users", "7"]).map (·.1.segs)
      = (matchTable testRoutes .get ["users", "8"]).map (·.1.segs)
 
--- No match reports nothing at all -- absence is the signal, so a 404 can't be confused with a
+-- No match reports nothing at all; absence is the signal, so a 404 can't be confused with a
 -- route whose pattern happens to be empty (`segs = []` is the root route, matched above).
 #guard matchTable testRoutes .get ["users", "nope"] = none
 #guard matchTable testRoutes .get ["missing"] = none

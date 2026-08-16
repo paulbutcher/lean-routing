@@ -1,0 +1,10 @@
+name = "tests"
+defaultTargets = ["RoutingTests"]
+testDriver = "RoutingTests"
+
+[[require]]
+name = "routing"
+path = ".."
+
+[[lean_lib]]
+name = "RoutingTests"

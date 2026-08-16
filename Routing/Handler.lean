@@ -1,12 +1,13 @@
+/-
+Copyright (c) 2026 Paul Butcher. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+-/
 import Routing.Pattern
-
-/-!
-Computing a handler's function type from a route pattern, and dispatching
-a decoded request path against it. -/
 
 namespace Routing
 
-/-- The type a handler for `segs` must have. -/
+/-- One argument per capture in `segs`, in order, correctly typed via `CaptureKind.type`;
+literal segments contribute nothing. -/
 def HandlerType (segs : List PathSeg) (result : Type) : Type :=
   match segs with
   | [] => result
@@ -20,8 +21,8 @@ to the extracted, typed capture values as it goes.
 A trailing `""` once `segs` is exhausted matches too: `Std.Http`'s path parser appends an empty
 segment for a request path ending in `/` (e.g. `/todos/7/` decodes to `["todos", "7", ""]`), and a
 route's own pattern never has a trailing slash of its own to match it structurally. Tolerating it
-here means a directory-style relative reference -- e.g. `Routing.relativeUrl`'s `"."`/`".."` case,
-which an RFC 3986-compliant resolver always turns into a trailing-slash URL -- actually reaches its
+here means a directory-style relative reference (e.g. `Routing.relativeUrl`'s `"."`/`".."` case,
+which an RFC 3986-compliant resolver always turns into a trailing-slash URL) actually reaches its
 target instead of 404ing. -/
 def dispatch {result : Type} :
     (segs : List PathSeg) → HandlerType segs result → List String → Option result
@@ -32,7 +33,8 @@ def dispatch {result : Type} :
   | .capture _ .string :: rest, h, p :: ps => dispatch rest (h p) ps
   | _, _, _ => none
 
-/-- The Lean type a reverse-routing function for `segs` produces -/
+/-- `String` for a pattern with no captures; otherwise one argument per capture, in order,
+returning the rendered path. -/
 @[reducible] def LinkType : List PathSeg → Type
   | [] => String
   | .lit _ :: rest => LinkType rest
