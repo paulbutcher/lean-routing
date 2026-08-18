@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.6.0] - 2026-08-18
+
+Add `matchedPattern?`
+
 ## [0.5.0] - 2026-08-16
 
 Tidying up and restructuring
