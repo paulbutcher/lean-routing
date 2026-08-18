@@ -128,6 +128,11 @@ def handler (request : Request Body.Stream) : ContextAsync (Response Body.Any) :
   | none => ...           -- nothing matched; this is the 404
 ```
 
+Alternatively, `Routing.matchedPattern?` drops each capture's kind (useful for telemetry):
+
+```lean
+#eval Routing.matchedPattern? response.extensions  -- some "/users/:id", not "/users/:id:Nat"
+
 ### Relative links
 
 `Routing.relativeUrl current to` builds a relative reference between two already-rendered links,

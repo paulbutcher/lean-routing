@@ -53,6 +53,31 @@ where
     | [cs] => cs
     | cs :: rest => cs ++ '/' :: joinWithSlash rest
 
+/-- Renders a single segment to its template spelling: a literal verbatim, a capture as its
+name alone under a leading `':'`. -/
+def PathSeg.toTemplate (seg : PathSeg) : String :=
+  match seg with
+  | .lit s => s
+  | .capture name _ => String.ofList (':' :: name.toList)
+
+/-- Renders a full pattern to the low-cardinality *template* that names the endpoint, e.g.
+`[.lit "todos", .capture "id" .nat] ↦ "/todos/:id"`. Where `renderPattern` reproduces a pattern's
+source text, this identifies the endpoint that text routes to, which is what an OpenTelemetry
+`http.route` attribute (and the span name derived from it) wants.
+
+The spelling is the pattern language's own with the kind removed, so a reader of a `route_table`
+recognises it with no second syntax to learn.
+
+Unlike `renderPattern`, this is deliberately **not** injective: `/x/:id:Nat` and `/x/:id:String`
+render alike, and that is the point. An endpoint's identity should not move when a capture's kind
+changes, because no client can observe such a change, yet telemetry keyed on the endpoint must
+stay joined across it (`renderTemplate_kind_invariant`, `test/RoutingTests/Pattern.lean`). The
+same fact disqualifies the result from round-tripping, so nothing should try to parse it;
+`renderPattern` is the renderer `parsePattern` inverts. -/
+def renderTemplate (segs : List PathSeg) : String :=
+  String.ofList
+    ('/' :: renderPattern.joinWithSlash (segs.map (fun seg => seg.toTemplate.toList)))
+
 /-- Splits a single first `':'` off a `List Char`, e.g. `"id:Nat".toList`
 splits to `("id".toList, "Nat".toList)`. Returns `none` if there is no
 second `':'` (a capture segment missing its kind, e.g. bare `:id`). Plain

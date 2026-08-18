@@ -63,6 +63,12 @@ structure MatchedRoute where
   segs : List PathSeg
 deriving Repr, DecidableEq, TypeName
 
+/-- The matched route's endpoint template, e.g. `"/users/:id"`, with any mount prefixes already
+applied. `renderTemplate` rather than `renderPattern`, so the string survives a change to a
+capture's kind (`Pattern.lean`). -/
+def MatchedRoute.template (matched : MatchedRoute) : String :=
+  renderTemplate matched.segs
+
 /-- Matches one route against an incoming method and decoded path,
 producing the handler's result applied to any extracted captures. `none`
 if the method doesn't match, or if `dispatch` rejects the path (literal

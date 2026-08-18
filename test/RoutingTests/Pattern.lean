@@ -185,4 +185,24 @@ theorem parsePattern_renderPattern (segs : List PathSeg) (h : ∀ seg ∈ segs, 
     show mapSegs (splitChars (c0 :: r0)) = some (seg :: segs')
     rw [← hcr0, splitChars_joinWithSlash _ hnoSlash hcssNe, mapSegs_toString (seg :: segs') h]
 
+/-! ## `renderTemplate` names an endpoint rather than reproducing a pattern
+ -/
+
+#guard renderTemplate [] = "/"
+#guard renderTemplate [.lit "todos"] = "/todos"
+#guard renderTemplate [.lit "todos", .capture "id" .nat, .lit "edit"] = "/todos/:id/edit"
+
+/-- **The guarantee that telemetry keyed on `renderTemplate` rests on**: an endpoint's template
+does not move when a capture's kind does. A route rewritten from `:id:Nat` to `:id:String` is
+invisible to every client, and this is what makes it invisible to every dashboard, alert and SLO
+grouped by the route as well, so historical data still joins to new.
+
+Read the other way round, it is exactly why `renderTemplate` has no counterpart to
+`parsePattern_renderPattern`: a template that survives the kind changing cannot recover it. -/
+theorem renderTemplate_kind_invariant (name : String) (k k' : CaptureKind)
+    (pre post : List PathSeg) :
+    renderTemplate (pre ++ .capture name k :: post)
+      = renderTemplate (pre ++ .capture name k' :: post) := by
+  simp [renderTemplate, PathSeg.toTemplate]
+
 end Routing

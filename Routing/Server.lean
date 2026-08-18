@@ -23,6 +23,15 @@ from a match rather than reported as an empty or guessed pattern. -/
 def matchedRoute? (extensions : Extensions) : Option MatchedRoute :=
   extensions.get MatchedRoute
 
+/-- The endpoint template of the route that matched (`MatchedRoute.template`), from a request's or
+a response's `extensions`; `none` where `matchedRoute?` gives `none`.
+
+Telemetry middleware wants exactly this composition, and wants it as a value it can be handed:
+one function supplying both an `http.route` attribute and the span name built from it. Provided
+here so no consumer hand-rolls it and reaches for `renderPattern` on the way. -/
+def matchedPattern? (extensions : Extensions) : Option String :=
+  (matchedRoute? extensions).map (·.template)
+
 /-- Wires a route table into a `Std.Http.Server.Handler`: decodes the
 incoming request's method and path (`RequestTarget.path.toDecodedSegments`
 feeds `dispatch` via `matchTable`), tries each route in order, and

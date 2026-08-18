@@ -32,14 +32,16 @@ private def serverRoutes : List (Route Result) :=
                   response.extensions.insert
                     (SeenByHandler.mk (matchedRoute? request.extensions)) }) ]
 
-private def runRequest (target : String) : IO (Option MatchedRoute × Option SeenByHandler) :=
+private def runRequest (target : String) :
+    IO (Option MatchedRoute × Option String × Option SeenByHandler) :=
   Async.block <| ContextAsync.run do
     let some uri := RequestTarget.parse? target
       | throw (IO.userError s!"test target {target.quote} is not a valid request target")
     let body ← Body.empty
     let request := (Request.get uri).body body
     let response ← (toHandler serverRoutes).onRequest request
-    return (matchedRoute? response.extensions, response.extensions.get SeenByHandler)
+    return (matchedRoute? response.extensions, matchedPattern? response.extensions,
+            response.extensions.get SeenByHandler)
 
 private def expected : MatchedRoute := { method := .get, segs := userSegs }
 
@@ -47,15 +49,18 @@ private def check (label : String) (ok : Bool) : IO Unit :=
   unless ok do throw (IO.userError s!"{label}")
 
 #eval show IO Unit from do
-  let (onResponse, seen) ← runRequest "/users/7"
+  let (onResponse, pattern, seen) ← runRequest "/users/7"
   check s!"response should carry {repr expected}, got {repr onResponse}" (onResponse == some expected)
   check "handler should see the matched route on its request"
     (seen.map (·.matched) == some (some expected))
+  check s!"response should carry the endpoint template, got {repr pattern}"
+    (pattern == some "/users/:id")
 
   -- Requirement: absence is the signal. A 404 carries no `MatchedRoute` at all, so a consumer
   -- can tell "no route matched" from "matched a route whose pattern is empty".
-  let (onResponse, seen) ← runRequest "/nope"
+  let (onResponse, pattern, seen) ← runRequest "/nope"
   check s!"404 response should carry no MatchedRoute, got {repr onResponse}" (onResponse == none)
   check "404 should not reach a route handler" seen.isNone
+  check s!"404 response should carry no template, got {repr pattern}" (pattern == none)
 
 end Routing

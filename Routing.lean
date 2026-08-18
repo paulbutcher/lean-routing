@@ -29,6 +29,10 @@ and handler into a route table, tried in order. `matchTable` is
 (`MatchedRoute`); `toHandler` (`Routing/Server.lean`) publishes that on the
 request it passes down *and* on the response it returns, since a middleware
 wrapping the router has only the response to read it from.
+`Routing.matchedPattern?` renders that route back as `"/users/:id"`: an
+endpoint's identity, which drops each capture's kind and so holds still
+when the kind changes, as against `renderPattern`'s `"/users/:id:Nat"`,
+which reproduces the pattern's source text and parses back.
 
 A `route_table` row can also `mount` another `route_table`-generated table
 under a literal path prefix (`Routing/RouteTable.lean`), nesting its whole
