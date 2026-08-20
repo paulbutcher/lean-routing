@@ -2,8 +2,13 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Lean
-import Routing.Handler
+module
+
+public import Routing.Handler
+public meta import Routing.Pattern
+public meta import Lean.Elab.Command
+meta import Lean.Structure
+meta import Std.Data.HashMap
 
 /-!
 `route_table App [ name := "pattern", ... ]`: generates, for each row, a field of a generated
@@ -24,7 +29,13 @@ recursively, to whatever depth `SubApp` itself mounts further apps, under `App.p
 only add a function arrow for `.capture` segments, so a literal prefix leaves a mounted route's
 required handler type unchanged from what it would be for the un-mounted pattern, so no glue code
 is needed at the call site that builds the actual `Route`.
+
+The elaborator below is the only thing here that needs the Lean frontend, and it reaches it
+through `meta import` alone, so a program built against this library does not link it
+(`scripts/check-runtime.sh`).
 -/
+
+public section
 
 namespace Routing
 
@@ -45,17 +56,17 @@ syntax (name := routeTableCmd) "route_table" ident routeTableRows : command
 
 /-- A row is either a plain pattern (`.leaf`) or a mount of another app's whole table under a
 literal prefix (`.mount`). -/
-private inductive RowKind where
+private meta inductive RowKind where
   | leaf (pat : TSyntax `str)
   | mount (prefixPat : TSyntax `str) (sub : Ident)
 
-private def qualifyPlain (src : Syntax) (appName : Name) (suffix : Name) : Ident :=
+private meta def qualifyPlain (src : Syntax) (appName : Name) (suffix : Name) : Ident :=
   mkIdentFrom src (appName ++ suffix)
 
 /-- Parses `src` as a `command` and elaborates it, blaming `ref` (the `route_table` invocation) on
 a parse failure. See the "3/4" comment below for why generated commands go through source text
 rather than `Syntax` quotation here. -/
-private def elabCommandFromSource (ref : Syntax) (src : String) : CommandElabM Unit := do
+private meta def elabCommandFromSource (ref : Syntax) (src : String) : CommandElabM Unit := do
   match Lean.Parser.runParserCategory (← getEnv) `command src with
   | .error msg => throwErrorAt ref msg
   | .ok stx => elabCommand stx
@@ -64,7 +75,7 @@ private def elabCommandFromSource (ref : Syntax) (src : String) : CommandElabM U
 `Routing.PathSeg.lit "todos"`. Used (below) to splice an already-parsed, already-in-normal-form
 `List PathSeg` *literal* into generated code, rather than a pattern-string call the elaborator
 would still have to reduce. -/
-private def segSrc : PathSeg → String
+private meta def segSrc : PathSeg → String
   | .lit s => s!"Routing.PathSeg.lit {s.quote}"
   | .capture name .nat => s!"Routing.PathSeg.capture {name.quote} .nat"
   | .capture name .string => s!"Routing.PathSeg.capture {name.quote} .string"
@@ -74,21 +85,21 @@ what `dispatch` itself accepts). `throwErrorAt pat` on a malformed pattern
 directly: this runs in `CommandElabM`, building source text for codegen rather than elaborating an
 object-level term, so plain `parsePattern` plus an explicit match is the natural way to get
 "malformed pattern is a macro-time elaboration error" here. -/
-private def parseSegsOrThrow (pat : TSyntax `str) : CommandElabM (List PathSeg) :=
+private meta def parseSegsOrThrow (pat : TSyntax `str) : CommandElabM (List PathSeg) :=
   match parsePattern pat.getString with
   | some segs => pure segs
   | none => throwErrorAt pat s!"invalid route pattern {pat.getString.quote}"
 
 /-- Renders already-parsed segments back to Lean source text for a `List PathSeg` literal. -/
-private def segsListSrc (segs : List PathSeg) : String :=
+private meta def segsListSrc (segs : List PathSeg) : String :=
   "[" ++ String.intercalate ", " (segs.map segSrc) ++ "]"
 
-private def segsSrcFor (pat : TSyntax `str) : CommandElabM String :=
+private meta def segsSrcFor (pat : TSyntax `str) : CommandElabM String :=
   return segsListSrc (← parseSegsOrThrow pat)
 
 /-- Like `segsSrcFor`, but for a `mount` row's prefix: additionally rejects any `.capture`
 segment, since mount prefixes are literal-only (see module docstring). -/
-private def prefixSegsSrcFor (pat : TSyntax `str) : CommandElabM String := do
+private meta def prefixSegsSrcFor (pat : TSyntax `str) : CommandElabM String := do
   let segs ← parseSegsOrThrow pat
   if segs.any (fun | .capture .. => true | .lit _ => false) then
     throwErrorAt pat s!"mount prefix must not contain captures (got {pat.getString.quote}); captured mount prefixes are not yet supported"
@@ -98,7 +109,7 @@ private def prefixSegsSrcFor (pat : TSyntax `str) : CommandElabM String := do
 accounting for the current namespace/opens the same way a plain identifier typed by the user
 would resolve. Fails loudly if `sub` doesn't name a `route_table`-generated app, rather than
 risking `getStructureFields` silently treating a non-structure as having no fields. -/
-private def resolveSubPatterns (sub : Ident) : CommandElabM Name := do
+private meta def resolveSubPatterns (sub : Ident) : CommandElabM Name := do
   let patternsId := mkIdentFrom sub (sub.getId ++ `Patterns)
   let name ← resolveGlobalConstNoOverload patternsId
   unless isStructure (← getEnv) name do
@@ -110,7 +121,7 @@ shaped structure (i.e. `field` came from a `mount` row when `structName`'s table
 `none` if it's a leaf field (`List Routing.PathSeg`). Reads the field's type off its projection
 function's declared type (`∀ (self : structName), FieldType`) rather than the field's *value*,
 since this only needs to classify the shape, not evaluate anything. -/
-private def mountedFieldStruct? (env : Environment) (structName field : Name) :
+private meta def mountedFieldStruct? (env : Environment) (structName field : Name) :
     CommandElabM (Option Name) := do
   let some info := getFieldInfo? env structName field
     | throwError "internal error: field '{field}' not found on '{structName}'"
@@ -129,7 +140,7 @@ private def mountedFieldStruct? (env : Environment) (structName field : Name) :
 
 /-- How deeply `mount` rows may nest. The walk below needs some bound to be a total function, and
 mount chains are short by construction: each level is a separately-declared feature module. -/
-private def maxMountDepth : Nat := 64
+private meta def maxMountDepth : Nat := 64
 
 /-- Recursively walks `structName` (a `Patterns`-shaped structure, reachable via `accessSrc`, Lean
 source text for a value of that type, e.g. `"BlogRoutes.patterns"`), building the
@@ -139,7 +150,7 @@ mount nests to whatever depth the sub-table itself nests; `prefixSegsSrc` is the
 depth, since a mount's prefix applies to everything under it. Links values are computed from the
 *Patterns* side (`Routing.linkFor` applied to the prefixed segs), same as a leaf row does; there's
 no pre-built link function to unwrap. -/
-private def mountFieldsSrc (env : Environment) (fuel : Nat) (structName : Name) (accessSrc : String)
+private meta def mountFieldsSrc (env : Environment) (fuel : Nat) (structName : Name) (accessSrc : String)
     (prefixSegsSrc : String) : CommandElabM (String × String) := do
   match fuel with
   | 0 => throwError "mounted route tables nest more than {maxMountDepth} levels deep at '{structName}'"
@@ -162,14 +173,14 @@ termination_by fuel
 
 /-- One row's generated field: its `Patterns`/`Links` field type and value, as Lean source text.
 Computed once per row (`rowGenFor`), reused below by both `Patterns` (3/4) and `Links` (5/6). -/
-private structure RowGen where
+private meta structure RowGen where
   name : Ident
   patternsFieldTypeSrc : String
   patternsValueSrc : String
   linksFieldTypeSrc : String
   linksValueSrc : String
 
-private def rowGenFor (env : Environment) (name : Ident) : RowKind → CommandElabM RowGen
+private meta def rowGenFor (env : Environment) (name : Ident) : RowKind → CommandElabM RowGen
   | .leaf pat => do
       let segsSrc ← segsSrcFor pat
       pure

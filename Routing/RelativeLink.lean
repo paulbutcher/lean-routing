@@ -2,6 +2,7 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
+module
 
 /-!
 `Routing.relativeUrl current to` computes a relative reference from the page currently being
@@ -13,6 +14,10 @@ mount-prefix knowledge, and prepending the *same* literal prefix to both cancels
 self-link using its own *unprefixed* `Module.links` values, with no need to thread the mount's
 prefix or the mounted (`App.links.blog`-style) `Links` struct through at all.
 -/
+
+public section
+
+@[expose] section
 
 namespace Routing
 

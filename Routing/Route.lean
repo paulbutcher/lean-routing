@@ -2,14 +2,20 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Std.Http.Data.Method
-import Routing.Handler
+module
+
+public import Std.Http.Data.Method
+public import Routing.Handler
 
 /-!
 Bundling a method, a path pattern, and a matching handler into a `Route`,
 and dispatching an incoming `(Method, path)` against a table of them in
 order.
 -/
+
+public section
+
+@[expose] section
 
 namespace Routing
 

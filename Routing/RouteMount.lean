@@ -2,8 +2,10 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Lean
-import Routing.Route
+module
+
+public import Routing.Route
+public meta import Routing.Pattern
 
 /-!
 `mount_routes "prefix" routes`: the `Route`-level analogue of `route_table`'s `mount` row
@@ -24,11 +26,13 @@ variable), so `HandlerType (prefix ++ segs) result` reduces to `HandlerType segs
 `segs`, without a cast or proof.
 -/
 
+public section
+
 namespace Routing
 
 open Lean
 
-private def segTerm : PathSeg → MacroM (TSyntax `term)
+private meta def segTerm : PathSeg → MacroM (TSyntax `term)
   | .lit s => `(Routing.PathSeg.lit $(quote s))
   | .capture name .nat => `(Routing.PathSeg.capture $(quote name) .nat)
   | .capture name .string => `(Routing.PathSeg.capture $(quote name) .string)
@@ -36,7 +40,7 @@ private def segTerm : PathSeg → MacroM (TSyntax `term)
 /-- Parses `pat` into segments for a mount prefix, rejecting captures: the same restriction, and
 the same error message, as `route_table`'s `mount` row; see `prefixSegsSrcFor`,
 `RouteTable.lean`. -/
-private def mountPrefixSegs (pat : TSyntax `str) : MacroM (List PathSeg) := do
+private meta def mountPrefixSegs (pat : TSyntax `str) : MacroM (List PathSeg) := do
   match parsePattern pat.getString with
   | none => Macro.throwErrorAt pat s!"invalid route pattern {pat.getString.quote}"
   | some segs =>

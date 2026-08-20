@@ -8,3 +8,10 @@ path = ".."
 
 [[lean_lib]]
 name = "RoutingTests"
+
+# A whole consumer of the library, built as an executable so that `scripts/check-runtime.sh` can
+# read the Lean package's absence off a real binary. Deliberately not a default target: it is the
+# subject of that check rather than one of the tests above.
+[[lean_exe]]
+name = "leanFree"
+root = "LeanFree"

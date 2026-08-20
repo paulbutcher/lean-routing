@@ -2,13 +2,15 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Routing.Pattern
-import Routing.Handler
-import Routing.Route
-import Routing.Server
-import Routing.RouteTable
-import Routing.RouteMount
-import Routing.RelativeLink
+module
+
+public import Routing.Pattern
+public import Routing.Handler
+public import Routing.Route
+public import Routing.Server
+public import Routing.RouteTable
+public import Routing.RouteMount
+public import Routing.RelativeLink
 
 /-!
 This library attempts to balance low ceremony with static guarantees that

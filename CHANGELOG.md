@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.7.0] - 2026-08-20
+
+Move to the module system, keeping the Lean frontend out of a consumer's binary.
+
 ## [0.6.0] - 2026-08-18
 
 Add `matchedPattern?`
