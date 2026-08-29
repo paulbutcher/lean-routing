@@ -13,44 +13,24 @@ public import Routing.RouteMount
 public import Routing.RelativeLink
 
 /-!
-This library attempts to balance low ceremony with static guarantees that
-a wrong-arity/wrong-type handler is a compile error
+Low ceremony, with the static guarantee that a wrong-arity or wrong-type handler is a compile
+error.
 
 ## Design overview
 
-A route pattern string (`"/users/:id:Nat"`) parses (`Routing/Pattern.lean`)
-into `List PathSeg`, plain runtime data, with no type-level encoding. From
-that *value*, `HandlerType segs result` (`Routing/Handler.lean`) computes
-the *type* a matching handler must have (one argument per capture,
-correctly typed via `CaptureKind.type`), using Lean's dependent types
-directly
+A route pattern string (`"/users/:id:Nat"`) parses (`Routing/Pattern.lean`) into `List PathSeg`,
+plain runtime data with no type-level encoding. From that *value*, `HandlerType segs result`
+(`Routing/Handler.lean`) computes the *type* a matching handler must have.
 
-`Route`/`dispatchTable` (`Routing/Route.lean`) bundle a method, pattern,
-and handler into a route table, tried in order. `matchTable` is
-`dispatchTable` plus the identity of the route that matched
-(`MatchedRoute`); `toHandler` (`Routing/Server.lean`) publishes that on the
-request it passes down *and* on the response it returns, since a middleware
-wrapping the router has only the response to read it from.
-`Routing.matchedPattern?` renders that route back as `"/users/:id"`: an
-endpoint's identity, which drops each capture's kind and so holds still
-when the kind changes, as against `renderPattern`'s `"/users/:id:Nat"`,
-which reproduces the pattern's source text and parses back.
+`Route`/`dispatchTable` (`Routing/Route.lean`) bundle a method, pattern, and handler into a table
+tried in order. `matchTable` adds the identity of the route that matched, which `toHandler`
+(`Routing/Server.lean`) publishes for a wrapping middleware to read back.
 
-A `route_table` row can also `mount` another `route_table`-generated table
-under a literal path prefix (`Routing/RouteTable.lean`), nesting its whole
-`patterns`/`links` shape, recursively, to whatever depth the mounted
-table itself mounts further tables, so an app can be composed from
-independently-declared feature modules.
-
-`Routing.relativeUrl` (`Routing/RelativeLink.lean`) computes a relative
-link between two already-rendered `linkFor`/`.links` paths, letting code
-inside a mounted module self-link using its own unprefixed `.links`
-values regardless of where (or whether) the module ends up mounted:
-prepending a shared literal prefix to both endpoints cancels out of the
-result. `dispatch` (`Routing/Handler.lean`) tolerates a single trailing
-empty path segment once a pattern is otherwise fully matched, so the
-directory-style (`"."`/`".."`) references an upward relative link
-resolves to still reach their target.
+A `route_table` row can `mount` another table under a literal path prefix
+(`Routing/RouteTable.lean`); `mount_routes` (`Routing/RouteMount.lean`) does the same for a list of
+already-built routes. Either way an app composes from independently-declared feature modules, and
+`Routing.relativeUrl` (`Routing/RelativeLink.lean`) lets code inside one self-link from its own
+unprefixed links, wherever the module ends up mounted.
 
 ## Limitations
 

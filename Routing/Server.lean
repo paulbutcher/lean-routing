@@ -32,9 +32,9 @@ def matchedRoute? (extensions : Extensions) : Option MatchedRoute :=
 /-- The endpoint template of the route that matched (`MatchedRoute.template`), from a request's or
 a response's `extensions`; `none` where `matchedRoute?` gives `none`.
 
-Telemetry middleware wants exactly this composition, and wants it as a value it can be handed:
-one function supplying both an `http.route` attribute and the span name built from it. Provided
-here so no consumer hand-rolls it and reaches for `renderPattern` on the way. -/
+Provided as a value telemetry middleware can be handed directly, supplying both an `http.route`
+attribute and the span name built from it, so no consumer hand-rolls the composition and reaches
+for `renderPattern` on the way. -/
 def matchedPattern? (extensions : Extensions) : Option String :=
   (matchedRoute? extensions).map (·.template)
 

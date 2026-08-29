@@ -38,9 +38,8 @@ def route (method : Method) (segs : List PathSeg) {result : Type}
   { method, segs, handler }
 
 /-- Per-method aliases for `route`, for `segs` sourced from a `route_table`-generated
-`App.Patterns` value, so a route table can write `.get`/`.post`/`.put`/`.delete` (resolved via
-Lean's generalized dot notation against the list's expected `Route result` element type) instead
-of `route .get`/`route .post`/etc. -/
+`App.Patterns` value, so a route table can write `.get`/`.post`/`.put`/`.delete` instead of
+`route .get`/`route .post`/etc. -/
 def Route.get (segs : List PathSeg) {result : Type} (handler : HandlerType segs result) :
     Route result :=
   route .get segs handler
@@ -97,9 +96,9 @@ def Route.tryMatch (r : Route result) (method : Method) (path : List String) :
 /-- `dispatchTable`, additionally reporting which route matched; the only place that fact is
 available, since a `result` on its own says nothing about the pattern that produced it.
 
-A separate entry point rather than a redefinition of `dispatchTable` in terms of this one: the two
-share their first-match-wins order but not their type, and `dispatchTable`'s existing callers
-should keep the definition they already unfold. Any change to matching order belongs in both. -/
+Kept separate rather than either being defined in terms of the other, so `dispatchTable`'s callers
+keep the definition they already unfold. The two share their first-match-wins order, so any change
+to matching order belongs in both. -/
 def matchTable (routes : List (Route result)) (method : Method) (path : List String) :
     Option (MatchedRoute × result) :=
   routes.findSome? (Route.tryMatch · method path)

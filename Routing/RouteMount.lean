@@ -18,12 +18,10 @@ already live in a flat, ordered `List`, so nesting is just repeated prefixing an
 associates freely (`mount_routes "/outer" (mount_routes "/mid" innerRoutes ++ ownRoutes)`).
 
 No handler-level glue is needed either: `HandlerType` (`Handler.lean`) skips over `.lit` segments
-without adding an argument, so a handler built against the sub-app's own unprefixed pattern already
-has exactly the type needed once prefixed; only each route's `segs` field actually changes.
-Lean accepts the unchanged `handler` field by straight reduction: the prefix's `.lit` segments are
-literal constructors sitting right there in the generated term (not hidden behind an opaque
-variable), so `HandlerType (prefix ++ segs) result` reduces to `HandlerType segs result` for any
-`segs`, without a cast or proof.
+without adding an argument, so only each route's `segs` field actually changes. The prefix's `.lit`
+segments are literal constructors sitting right there in the generated term, not hidden behind an
+opaque variable, so `HandlerType (prefix ++ segs) result` reduces to `HandlerType segs result` for
+any `segs` and the unchanged `handler` field is accepted without a cast or proof.
 -/
 
 public section

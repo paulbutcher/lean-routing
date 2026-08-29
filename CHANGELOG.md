@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.7.1] - 2026-08-29
+
+Tidy the documentation, and fix an unterminated code fence in the README.
+
 ## [0.7.0] - 2026-08-20
 
 Move to the module system, keeping the Lean frontend out of a consumer's binary.

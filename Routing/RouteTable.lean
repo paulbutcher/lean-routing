@@ -80,11 +80,8 @@ private meta def segSrc : PathSeg → String
   | .capture name .nat => s!"Routing.PathSeg.capture {name.quote} .nat"
   | .capture name .string => s!"Routing.PathSeg.capture {name.quote} .string"
 
-/-- Parses `pat`'s string value with the real `Routing.parsePattern` (so this can never drift from
-what `dispatch` itself accepts). `throwErrorAt pat` on a malformed pattern
-directly: this runs in `CommandElabM`, building source text for codegen rather than elaborating an
-object-level term, so plain `parsePattern` plus an explicit match is the natural way to get
-"malformed pattern is a macro-time elaboration error" here. -/
+/-- Parses `pat`'s string value with the real `Routing.parsePattern`, so what a `route_table` row
+accepts can never drift from what `dispatch` itself accepts. -/
 private meta def parseSegsOrThrow (pat : TSyntax `str) : CommandElabM (List PathSeg) :=
   match parsePattern pat.getString with
   | some segs => pure segs
