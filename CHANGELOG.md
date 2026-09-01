@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.7.2] - 2026-09-01
+
+Expose the definitions a `route_table` generates, so a route table can be used from another module.
+
 ## [0.7.1] - 2026-08-29
 
 Tidy the documentation, and fix an unterminated code fence in the README.

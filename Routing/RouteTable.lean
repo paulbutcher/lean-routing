@@ -20,7 +20,9 @@ parsed pattern; `Handler.lean`) and the corresponding field of `App.links` (buil
 Every pattern is parsed exactly once, right here, at the `route_table` row that declares it, so
 a malformed pattern is a compile error at that row. `App.patterns`, consumed directly by
 `Route.get`/`.post`/etc. (`Route.lean`), is how a route built from this table avoids re-parsing
-(and so re-validating) the same pattern string a second time.
+(and so re-validating) the same pattern string a second time. Both values are exposed: their
+bodies are the interface, since `HandlerType`/`LinkType` reduce the pattern they are given, so a
+module that builds a route from a table declared elsewhere needs more than the type.
 
 A row can also *mount* another `route_table`-generated app under a literal path prefix
 (`name := mount "prefix" SubApp`), nesting `SubApp`'s whole `Patterns`/`Links` shape,
@@ -70,6 +72,17 @@ private meta def elabCommandFromSource (ref : Syntax) (src : String) : CommandEl
   match Lean.Parser.runParserCategory (← getEnv) `command src with
   | .error msg => throwErrorAt ref msg
   | .ok stx => elabCommand stx
+
+/-- `"@[expose] "` where that attribute is meaningful and not already implied, `""` otherwise:
+Lean warns about it outside a `module` file, on a definition that is not public, and inside an
+`@[expose] section`. Why the generated values are exposed at all: see the module docstring. -/
+private meta def exposeSrc : CommandElabM String := do
+  let scope ← getScope
+  let inExposeSection := scope.attrs.any (· matches `(Lean.Parser.Term.attrInstance| expose))
+  if (← getEnv).header.isModule && scope.isPublic && !inExposeSection then
+    return "@[expose] "
+  else
+    return ""
 
 /-- Lean *source text* for one already-parsed `PathSeg`, e.g. `.lit "todos"` renders as
 `Routing.PathSeg.lit "todos"`. Used (below) to splice an already-parsed, already-in-normal-form
@@ -245,11 +258,12 @@ elab_rules : command
     elabCommandFromSource appId
       s!"structure {patternsTypeIdent.getId} where\n  {patternFieldsSrc}"
 
+    let expose ← exposeSrc
     let patternValFieldsSrc := String.intercalate ", " <|
       rowGens.toList.map fun g => s!"{g.name.getId} := {g.patternsValueSrc}"
     elabCommandFromSource appId <|
-      "def " ++ toString patternsValIdent.getId ++ " : " ++ toString patternsTypeIdent.getId ++
-        " := { " ++ patternValFieldsSrc ++ " }"
+      expose ++ "def " ++ toString patternsValIdent.getId ++ " : " ++
+        toString patternsTypeIdent.getId ++ " := { " ++ patternValFieldsSrc ++ " }"
 
     -- 5/6. `structure App.Links where name : LinkType [PathSeg literal] ...` and
     -- `def App.links : App.Links := { name := linkFor [PathSeg literal], ... }`.
@@ -270,7 +284,7 @@ elab_rules : command
     let valFieldsSrc := String.intercalate ", " <|
       rowGens.toList.map fun g => s!"{g.name.getId} := {g.linksValueSrc}"
     elabCommandFromSource appId <|
-      "def " ++ toString linksValIdent.getId ++ " : " ++ toString linksTypeIdent.getId ++
-        " := { " ++ valFieldsSrc ++ " }"
+      expose ++ "def " ++ toString linksValIdent.getId ++ " : " ++
+        toString linksTypeIdent.getId ++ " := { " ++ valFieldsSrc ++ " }"
 
 end Routing
