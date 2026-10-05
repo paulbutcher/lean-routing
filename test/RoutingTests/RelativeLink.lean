@@ -41,7 +41,7 @@ private theorem commonPrefixLen_append (p a b : List String) :
   | cons c p' ih =>
     show (if c = c then 1 + commonPrefixLen (p' ++ a) (p' ++ b) else 0)
         = (c :: p').length + commonPrefixLen a b
-    rw [if_pos rfl, ih, List.length_cons]
+    rw [ite_eq_left rfl, ih, List.length_cons]
     omega
 
 theorem relativeSegments_prefix (p fromDir toSegs : List String) :

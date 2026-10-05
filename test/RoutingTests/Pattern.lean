@@ -43,7 +43,7 @@ private theorem splitOnceColon_append (name tail : List Char)
     have hc : c ≠ ':' := h c (by simp)
     have hname' : ∀ c' ∈ name', c' ≠ ':' := fun c' hmem => h c' (by simp [hmem])
     show splitOnceColon ((c :: name') ++ ':' :: tail) = some (c :: name', tail)
-    simp only [List.cons_append, splitOnceColon, if_neg hc]
+    simp only [List.cons_append, splitOnceColon, ite_eq_right hc]
     rw [ih hname']
     rfl
 
@@ -55,7 +55,7 @@ private theorem splitChars_noSlash : ∀ (cs : List Char), (∀ c ∈ cs, c ≠ 
     have hcs' : ∀ c' ∈ cs', c' ≠ '/' := fun c' hmem => h c' (by simp [hmem])
     have ih := splitChars_noSlash cs' hcs'
     show splitChars (c :: cs') = [c :: cs']
-    simp only [splitChars, if_neg hc, ih]
+    simp only [splitChars, ite_eq_right hc, ih]
 
 private theorem splitChars_append_slash : ∀ (cs rest : List Char),
     (∀ c ∈ cs, c ≠ '/') → splitChars (cs ++ '/' :: rest) = cs :: splitChars rest
@@ -65,7 +65,7 @@ private theorem splitChars_append_slash : ∀ (cs rest : List Char),
     have hcs' : ∀ c' ∈ cs', c' ≠ '/' := fun c' hmem => h c' (by simp [hmem])
     have ih := splitChars_append_slash cs' rest hcs'
     show splitChars ((c :: cs') ++ '/' :: rest) = (c :: cs') :: splitChars rest
-    simp only [List.cons_append, splitChars, if_neg hc, ih]
+    simp only [List.cons_append, splitChars, ite_eq_right hc, ih]
 
 private theorem splitChars_joinWithSlash : ∀ (css : List (List Char)),
     (∀ cs ∈ css, ∀ c ∈ cs, c ≠ '/') → css ≠ [] →
@@ -94,7 +94,7 @@ private theorem parseSeg_toString (seg : PathSeg) (h : seg.WellFormed) :
         intro hcolon
         exact hnocolon (by simp [hs, hcolon])
       show parseSeg (c :: rest) = some (PathSeg.lit s)
-      simp only [parseSeg, if_neg hc]
+      simp only [parseSeg, ite_eq_right hc]
       rw [← hs, String.ofList_toList]
   | capture name kind =>
     obtain ⟨hne, hcond⟩ := h
@@ -103,7 +103,7 @@ private theorem parseSeg_toString (seg : PathSeg) (h : seg.WellFormed) :
       = some (PathSeg.capture name kind)
     rw [String.toList_ofList]
     show parseSeg (':' :: (name.toList ++ ':' :: kind.name.toList)) = some (PathSeg.capture name kind)
-    simp only [parseSeg, if_true]
+    simp only [parseSeg, ite_true]
     rw [splitOnceColon_append name.toList kind.name.toList hnocolon]
     have hnameNil : name.toList ≠ [] := fun heq => hne (String.toList_eq_nil_iff.mp heq)
     obtain ⟨c, cs, hname⟩ := List.exists_cons_of_ne_nil hnameNil
