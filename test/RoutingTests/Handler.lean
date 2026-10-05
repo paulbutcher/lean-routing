@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Routing.Handler
 import Routing.RelativeLink
+import Std.Http.Data.URI
 
 namespace Routing
 
@@ -46,7 +47,20 @@ def badArity : HandlerType userPattern String :=
 #guard linkFor [.lit "todos", .capture "id" .nat] 42 = "/todos/42"
 #guard linkFor [.lit "todos", .capture "id" .nat, .lit "edit"] 42 = "/todos/42/edit"
 #guard linkFor [.lit "users", .capture "name" .string] "ada" = "/users/ada"
+#guard linkFor [.lit "users", .capture "name" .string] "a b/c%" = "/users/a%20b%2Fc%25"
 
 #guard dispatch userPattern userHandler (pathSegments (linkFor userPattern 42)) = some "user #42"
+
+private def namePattern : List PathSeg := [.lit "users", .capture "name" .string, .lit "posts"]
+
+private def nameHandler : HandlerType namePattern String := fun (name : String) => name
+
+/-- The segments a server dispatches on: parsed and percent-decoded by `Std.Http`, as `toHandler`
+does with a request's target. -/
+private def served (link : String) : List String :=
+  ((Std.Http.RequestTarget.parse? link).map (·.path.toDecodedSegments.toList)).getD []
+
+#guard ["ada", "a b", "a/b", "100%", "x?y#z", "ünï", "../.."].all fun name =>
+  dispatch namePattern nameHandler (served (linkFor namePattern name)) == some name
 
 end Routing
