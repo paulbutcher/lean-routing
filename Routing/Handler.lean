@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Routing.Pattern
+public import Std.Http.Data.URI.Encoding
 
 public section
 
@@ -47,12 +48,14 @@ returning the rendered path. -/
   | .capture _ kind :: rest => kind.type → LinkType rest
 
 /-- Builds the `/`-joined path for `segs`, given the literal/rendered-capture parts collected so
-far. -/
+far. A `.string` capture is percent-encoded with the encoder `Std.Http` decodes with, so a value
+holding a `/`, a space or a `%` comes back from `dispatch` as itself rather than as other segments. -/
 def linkParts : (segs : List PathSeg) → List String → LinkType segs
   | [], parts => "/" ++ String.intercalate "/" parts
   | .lit s :: rest, parts => linkParts rest (parts ++ [s])
   | .capture _ .nat :: rest, parts => fun n => linkParts rest (parts ++ [toString n])
-  | .capture _ .string :: rest, parts => fun s => linkParts rest (parts ++ [s])
+  | .capture _ .string :: rest, parts => fun s =>
+    linkParts rest (parts ++ [toString (Std.Http.URI.EncodedSegment.encode s)])
 
 /-- The reverse-routing function for a route pattern's segments: a `String`, or a function taking
 one argument per capture (in order) and returning one, e.g.
