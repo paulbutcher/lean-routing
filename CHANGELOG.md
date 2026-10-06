@@ -4,6 +4,8 @@
 
 - Percent-encode `String` captures in generated links.
 - A `String` capture no longer matches an empty, `.` or `..` segment, since no link can carry one.
+- `relativeUrl` handles a trailing-slash current page, and a target segment that is empty or holds a `:`.
+- A mounted index renders with a trailing slash, and a request for it without one is redirected there.
 - Move to Lean v4.34.1.
 
 ## [0.7.2] - 2026-09-01

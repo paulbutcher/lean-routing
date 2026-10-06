@@ -81,11 +81,13 @@ route_table AppName
 ```
 
 ```lean
-#eval AppName.links.blog.index        -- "/blog"
+#eval AppName.links.blog.index        -- "/blog/"
 #eval AppName.links.blog.post "hi"    -- "/blog/hi"
 ```
 
 `AppName.patterns.blog.post` is the full prefixed pattern, so it plugs into `Route.get`/etc. the same way any other pattern does, and a handler for it needs no special wrapping: a mount prefix must be literal (no `:name:Kind` captures), so it never changes a route's required handler type. Mounts nest to any depth: a table that itself mounts other tables can be mounted again further up.
+
+A mounted index renders with a trailing slash, as the unmounted index `/` has, so that relative links from it work (see "Relative links" below). A request for it without the slash gets a `308` redirect to the slashed form.
 
 ### Hierarchical handlers
 

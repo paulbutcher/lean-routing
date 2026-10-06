@@ -18,10 +18,11 @@ already live in a flat, ordered `List`, so nesting is just repeated prefixing an
 associates freely (`mount_routes "/outer" (mount_routes "/mid" innerRoutes ++ ownRoutes)`).
 
 No handler-level glue is needed either: `HandlerType` (`Handler.lean`) skips over `.lit` segments
-without adding an argument, so only each route's `segs` field actually changes. The prefix's `.lit`
-segments are literal constructors sitting right there in the generated term, not hidden behind an
-opaque variable, so `HandlerType (prefix ++ segs) result` reduces to `HandlerType segs result` for
-any `segs` and the unchanged `handler` field is accepted without a cast or proof.
+without adding an argument, so only each route's `segs` field actually changes, to `mountSegs prefix
+segs` (`Pattern.lean`). The prefix's `.lit` segments are literal constructors sitting right there in
+the generated term, and the match on whether `segs` is empty settles which case of `mountSegs`
+applies, so in each branch `HandlerType` reduces to `HandlerType segs result` and the unchanged
+`handler` field is accepted without a cast or proof.
 -/
 
 public section
@@ -51,6 +52,10 @@ private meta def mountPrefixSegs (pat : TSyntax `str) : MacroM (List PathSeg) :=
 macro "mount_routes" pat:str routes:term:max : term => do
   let segs ← mountPrefixSegs pat
   let segTerms ← segs.toArray.mapM segTerm
-  `(($routes).map fun r => { r with segs := [$segTerms,*] ++ r.segs })
+  `(($routes).map fun
+      | { method, segs := [], handler } =>
+          { method, segs := Routing.mountSegs [$segTerms,*] [], handler }
+      | { method, segs := s :: ss, handler } =>
+          { method, segs := Routing.mountSegs [$segTerms,*] (s :: ss), handler })
 
 end Routing

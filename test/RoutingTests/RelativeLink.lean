@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Routing.RelativeLink
 import Routing.Handler
+import Plausible
 
 namespace Routing
 
@@ -64,5 +65,57 @@ private def itemHandler : HandlerType itemPattern String :=
 
 #guard relativeUrl (linkFor editPattern 5) (linkFor itemPattern 5) = "."
 #guard dispatch itemPattern itemHandler ["posts", "5", ""] = some "item #5"
+
+-- A page served at a trailing-slash path sits one directory deeper than without it.
+#guard relativeUrl "/posts/5/" "/posts/6" = "../6"
+
+-- A first segment holding a `:` would read as a scheme, and an empty one as an absolute path.
+#guard relativeUrl "/tags/x" "/tags/a:b" = "./a:b"
+#guard relativeUrl "/a/x" "/a//b" = ".//b"
+
+/-! ## Resolution
+
+What `relativeUrl` promises is that a resolver turns its result back into the target, so the
+property below checks exactly that against a model of RFC 3986 §5.2, restricted to the paths a
+route can render. -/
+
+private def removeDotSegments : List String → List String → List String
+  | out, [] => out
+  | out, ["."] => out ++ [""]
+  | out, [".."] => out.dropLast ++ [""]
+  | out, "." :: rest => removeDotSegments out rest
+  | out, ".." :: rest => removeDotSegments out.dropLast rest
+  | out, s :: rest => removeDotSegments (out ++ [s]) rest
+
+/-- `ref` resolved against the absolute path `base`, or `none` unless `ref` is a relative-path
+reference (RFC 3986 §4.2: non-empty, its first segment non-empty and free of `:`). -/
+private def resolve (base ref : String) : Option String :=
+  let segs := ref.splitOn "/"
+  let first := segs.headD ""
+  if first.isEmpty || first.contains ':' then none
+  else
+    let dir := ((base.splitOn "/").drop 1).dropLast
+    some ("/" ++ String.intercalate "/" (removeDotSegments [] (dir ++ segs)))
+
+/-- An absolute path a route can render: no segment is `.` or `..`. -/
+private def pathOf (segs : List String) : String :=
+  "/" ++ String.intercalate "/" (segs.filter fun s => s != "." && s != "..")
+
+/-- A directory-style result resolves with a trailing slash, which `dispatch` accepts. -/
+private def resolvesTo (current to : String) : Bool :=
+  let resolved := resolve current (relativeUrl current to)
+  resolved == some to || resolved == some (to ++ "/")
+
+/-- Segments of a rendered path, which never hold a `/`. -/
+private local instance (priority := high) : Plausible.Arbitrary String where
+  arbitrary := do
+    let chars ← Plausible.Gen.listOf (Plausible.Gen.elements "a:.".toList (by decide))
+    return String.ofList chars
+
+-- A shared prefix makes the "down"-only references, where the first segment matters, common.
+#eval Plausible.Testable.check
+  (∀ shared current to : List String,
+    resolvesTo (pathOf (shared ++ current)) (pathOf (shared ++ to)) = true)
+  { numInst := 1000, quiet := true }
 
 end Routing

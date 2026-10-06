@@ -64,9 +64,13 @@ private def served (link : String) : List String :=
 #guard ["", ".", ".."].all fun name =>
   dispatch namePattern nameHandler (served (linkFor namePattern name)) == none
 
-/-- Weighted towards the characters a path segment treats specially. -/
-private local instance : Plausible.Arbitrary Char :=
-  Plausible.Char.arbitraryFromList 3 "./%?#: aZ".toList (by decide)
+/-- Weighted towards the characters a path segment treats specially, with arbitrary ones mixed in.
+`Plausible`'s own `String` generator fixes its `Char` generator, so this replaces it whole. -/
+private local instance (priority := high) : Plausible.Arbitrary String where
+  arbitrary := do
+    let chars ← Plausible.Gen.listOf
+      (Plausible.Char.arbitraryFromList 3 "./%?#: aZ".toList (by decide)).arbitrary
+    return String.ofList chars
 
 -- A property, not a theorem: the round trip rests on `Std.Http`'s encoder and decoder, which have
 -- no lemmas relating them.

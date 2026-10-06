@@ -21,10 +21,13 @@ public section
 
 namespace Routing
 
-/-- Splits a `"/"`-separated absolute path into its segments, e.g. `"/posts/5/edit"` ↦
-`["posts", "5", "edit"]`, and `"/"` ↦ `[]`. -/
+/-- Splits a `"/"`-separated absolute path into its segments as a resolver does, keeping every empty
+segment but the leading one: `"/posts/5/edit"` ↦ `["posts", "5", "edit"]`, `"/posts/5/"` ↦
+`["posts", "5", ""]`, and `"/"` ↦ `[""]`. -/
 def pathSegments (path : String) : List String :=
-  path.splitOn "/" |>.filter (· ≠ "")
+  match path.splitOn "/" with
+  | "" :: segs => segs
+  | segs => segs
 
 def commonPrefixLen : List String → List String → Nat
   | a :: as, b :: bs => if a = b then 1 + commonPrefixLen as bs else 0
@@ -33,15 +36,19 @@ def commonPrefixLen : List String → List String → Nat
 /-- The segment-level core of `relativeUrl`: a relative reference from the "directory" the current
 page sits in (`fromDir`) to `toSegs`. Everything `relativeUrl` promises about mount prefixes holds
 at this level, where a shared prefix is literally a shared list prefix and cancels out
-(`relativeSegments_prefix`, `test/RoutingTests/RelativeLink.lean`). -/
+(`relativeSegments_prefix`, `test/RoutingTests/RelativeLink.lean`).
+
+A reference whose first segment is empty or holds a `:` is prefixed with `./`, since a resolver
+would otherwise read it as an absolute path or as a URI with a scheme. -/
 def relativeSegments (fromDir toSegs : List String) : String :=
   let common := commonPrefixLen fromDir toSegs
   let ups := fromDir.length - common
   let downs := toSegs.drop common
-  if ups == 0 && downs == [] then
-    "."
-  else
-    String.intercalate "/" (List.replicate ups ".." ++ downs)
+  let ref := String.intercalate "/" (List.replicate ups ".." ++ downs)
+  match ups, downs with
+  | 0, [] => "."
+  | 0, d :: _ => if d.isEmpty || d.contains ':' then "./" ++ ref else ref
+  | _, _ => ref
 
 /-- A relative reference from `current` (the page currently being served) to `to` (the link
 target), both absolute `"/"`-rooted paths, such that any RFC 3986 §5.3-compliant resolver (a

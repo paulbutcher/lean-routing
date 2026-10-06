@@ -171,8 +171,8 @@ private meta def mountFieldsSrc (env : Environment) (fuel : Nat) (structName : N
       let childAccessSrc := s!"{accessSrc}.{f}"
       match ← mountedFieldStruct? env structName f with
       | none =>
-          patFields := patFields.push s!"{f} := {prefixSegsSrc} ++ {childAccessSrc}"
-          linkFields := linkFields.push s!"{f} := Routing.linkFor ({prefixSegsSrc} ++ {childAccessSrc})"
+          patFields := patFields.push s!"{f} := Routing.mountSegs {prefixSegsSrc} {childAccessSrc}"
+          linkFields := linkFields.push s!"{f} := Routing.linkFor (Routing.mountSegs {prefixSegsSrc} {childAccessSrc})"
       | some nestedStructName =>
           let (nestedPat, nestedLink) ←
             mountFieldsSrc env fuel nestedStructName childAccessSrc prefixSegsSrc

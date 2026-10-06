@@ -38,10 +38,23 @@ for `renderPattern` on the way. -/
 def matchedPattern? (extensions : Extensions) : Option String :=
   (matchedRoute? extensions).map (·.template)
 
+/-- Where to redirect a request that matched no route but would match with a trailing slash, as a
+mounted index does (`mountSegs`, `Pattern.lean`): its target with the slash added, query intact.
+Serving the slashless form instead would break relative links from that page. -/
+def slashRedirect? (routes : List (Route Result)) (method : Method) (target : RequestTarget)
+    (path : List String) : Option Header.Value :=
+  if path.getLast? != some "" && (matchTable routes method (path ++ [""])).isSome then
+    let query := target.query
+    Header.Value.ofString?
+      (toString target.path ++ "/" ++ if query.isEmpty then "" else toString query)
+  else
+    none
+
 /-- Wires a route table into a `Std.Http.Server.Handler`: decodes the
 incoming request's method and path (`RequestTarget.path.toDecodedSegments`
 feeds `dispatch` via `matchTable`), tries each route in order, and
-applies the matched handler (or `notFound`) to the full request.
+applies the matched handler (or `notFound`) to the full request. A request that matches nothing
+but would with a trailing slash gets a `308` there instead (`slashRedirect?`).
 
 The matched route is published (as a `MatchedRoute` extension, read back with `matchedRoute?`)
 in *both* directions, because they reach different readers. The request copy is visible to the
@@ -56,6 +69,10 @@ def toHandler (routes : List (Route Result)) (notFound : Result := defaultNotFou
     | some (matched, handler) => do
         let response ← handler { request with extensions := request.extensions.insert matched }
         return { response with extensions := response.extensions.insert matched }
-    | none => notFound request
+    | none =>
+        match slashRedirect? routes request.line.method request.line.uri path with
+        | some location =>
+            Response.withStatus .permanentRedirect |>.header Header.Name.location location |>.text ""
+        | none => notFound request
 
 end Routing

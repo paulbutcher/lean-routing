@@ -57,7 +57,7 @@ fi
 expected="user 7
 post hi
 no match
-/blog
+/blog/
 /blog/posts/hi
 /users/7"
 actual=$("./$exe")

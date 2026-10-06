@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Routing.RouteTable
 import Routing.Route
 import Routing.RouteMount
+import Routing.RelativeLink
 
 namespace Routing
 
@@ -17,11 +18,16 @@ route_table MountTest
     blog := mount "/blog" MountLeafRoutes ]
 
 #guard MountTest.patterns.home = []
-#guard MountTest.patterns.blog.index = [.lit "blog"]
+#guard MountTest.patterns.blog.index = [.lit "blog", .lit ""]
 #guard MountTest.patterns.blog.item = [.lit "blog", .capture "slug" .string]
 #guard MountTest.links.home = "/"
-#guard MountTest.links.blog.index = "/blog"
+#guard MountTest.links.blog.index = "/blog/"
 #guard MountTest.links.blog.item "hi" = "/blog/hi"
+
+-- The reason a mounted index renders as a directory: a relative link from it is the same as from
+-- the unmounted index, so a module can compute it from its own unprefixed links.
+#guard relativeUrl MountTest.links.blog.index (MountTest.links.blog.item "hi") =
+  relativeUrl MountLeafRoutes.links.index (MountLeafRoutes.links.item "hi")
 
 -- A handler for a mounted route needs no extra wrapping for a literal prefix: `HandlerType`
 -- reduces through `.lit` segments, so this is exactly the handler `MountLeafRoutes.patterns.item`
@@ -49,6 +55,13 @@ route_table MountOuterTest
 #guard MountOuterTest.patterns.midMount.ownLeaf = [.lit "outer", .lit "own"]
 #guard MountOuterTest.links.midMount.innerMount.leaf1 = "/outer/mid/leaf1"
 #guard MountOuterTest.links.midMount.ownLeaf = "/outer/own"
+
+-- An index mounted twice keeps a single trailing slash.
+route_table MountTwiceTest
+  [ site := mount "/site" MountTest ]
+
+#guard MountTwiceTest.links.site.home = "/site/"
+#guard MountTwiceTest.links.site.blog.index = "/site/blog/"
 
 -- Negative-compile regression: a mount prefix with a capture is a command-time error
 -- (`prefixSegsSrcFor`, `RouteTable.lean`); mount prefixes must be literal.
@@ -78,14 +91,16 @@ private def leafRoutes : List (Route String) :=
 
 private def blogMountedRoutes : List (Route String) := mount_routes "/blog" leafRoutes
 
-#guard dispatchTable blogMountedRoutes .get ["blog"] = some "index"
+#guard dispatchTable blogMountedRoutes .get ["blog", ""] = some "index"
+#guard dispatchTable blogMountedRoutes .get ["blog"] = none
 #guard dispatchTable blogMountedRoutes .get ["blog", "hi"] = some "item hi"
 #guard dispatchTable blogMountedRoutes .get [] = none
 #guard dispatchTable blogMountedRoutes .get ["hi"] = none
 
 -- A mounted route reports its *prefixed* pattern, not the unprefixed one its handler was
 -- declared against: `mount_routes` rewrote `segs` itself, so there's nothing left to re-apply.
-#guard matchTable blogMountedRoutes .get ["blog"] = some ({ method := .get, segs := [.lit "blog"] }, "index")
+#guard matchTable blogMountedRoutes .get ["blog", ""]
+     = some ({ method := .get, segs := [.lit "blog", .lit ""] }, "index")
 #guard matchTable blogMountedRoutes .get ["blog", "hi"]
      = some ({ method := .get, segs := [.lit "blog", .capture "slug" .string] }, "item hi")
 #guard matchTable blogMountedRoutes .get ["hi"] = none
@@ -111,6 +126,8 @@ private def outerRoutes : List (Route String) := mount_routes "/outer" middleRou
 #guard matchTable outerRoutes .get ["outer", "own"]
      = some ({ method := .get, segs := [.lit "outer", .lit "own"] }, "own")
 #guard matchTable outerRoutes .get ["mid", "leaf1"] = none
+
+#guard dispatchTable (mount_routes "/site" blogMountedRoutes) .get ["site", "blog", ""] = some "index"
 
 -- Negative-compile regression: same capture restriction, and same error message, as `mount`
 -- (`mountPrefixSegs`, `RouteMount.lean`).

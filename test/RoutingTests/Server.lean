@@ -3,6 +3,7 @@ Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Routing.Server
+import Routing.RouteMount
 
 /-!
 `matchTable`'s own tests (`Route.lean`, `Mount.lean`) are pure `#guard`s over `Route String`.
@@ -62,5 +63,39 @@ private def check (label : String) (ok : Bool) : IO Unit :=
   check s!"404 response should carry no MatchedRoute, got {repr onResponse}" (onResponse == none)
   check "404 should not reach a route handler" seen.isNone
   check s!"404 response should carry no template, got {repr pattern}" (pattern == none)
+
+private def blogOwnRoutes : List (Route Result) :=
+  [ .get [] (handler := fun _request => Response.ok.text "blog"),
+    .post [.lit "posts"] (handler := fun _request => Response.ok.text "posted") ]
+
+private def blogRoutes : List (Route Result) := mount_routes "/blog" blogOwnRoutes
+
+private def statusAndLocation (method : Method) (target : String) :
+    IO (Status × Option String) :=
+  Async.block <| ContextAsync.run do
+    let some uri := RequestTarget.parse? target
+      | throw (IO.userError s!"test target {target.quote} is not a valid request target")
+    let body ← Body.empty
+    let request := ((Request.new.method method).uri uri).body body
+    let response ← (toHandler blogRoutes).onRequest request
+    return (response.line.status, (response.line.headers.get? Header.Name.location).map toString)
+
+#eval show IO Unit from do
+  let result ← statusAndLocation .get "/blog?page=2"
+  check s!"a mounted index without its slash should redirect, query intact, got {repr result}"
+    (result == (.permanentRedirect, some "/blog/?page=2"))
+
+  let result ← statusAndLocation .get "/blog/"
+  check s!"a mounted index with its slash should be served, got {repr result}"
+    (result == (.ok, none))
+
+  -- Only a route ending in a slash draws a redirect; `dispatch` already accepts a stray one.
+  let result ← statusAndLocation .post "/blog/posts/"
+  check s!"a trailing slash on another route should be served, got {repr result}"
+    (result == (.ok, none))
+
+  let result ← statusAndLocation .post "/blog"
+  check s!"no route for the method means no redirect, got {repr result}"
+    (result == (.notFound, none))
 
 end Routing

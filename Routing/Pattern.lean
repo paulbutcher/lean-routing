@@ -145,4 +145,12 @@ def parsePattern (s : String) : Option (List PathSeg) :=
   | '/' :: rest => mapSegs (splitChars rest)
   | _ => none
 
+/-- `segs` mounted under the literal prefix `pre`. A mounted index (`segs = []`) gains a trailing
+`.lit ""`, so it renders and matches as `/pre/`: a directory, as the unmounted index `/` is, which is
+what keeps a relative link from it the same whether or not it is mounted. -/
+def mountSegs : List PathSeg → List PathSeg → List PathSeg
+  | [], segs => segs
+  | pre, [] => pre ++ [.lit ""]
+  | pre, segs => pre ++ segs
+
 end Routing
