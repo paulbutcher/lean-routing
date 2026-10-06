@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Routing.Handler
 import Routing.RelativeLink
 import Std.Http.Data.URI
+import Plausible
 
 namespace Routing
 
@@ -60,7 +61,18 @@ does with a request's target. -/
 private def served (link : String) : List String :=
   ((Std.Http.RequestTarget.parse? link).map (·.path.toDecodedSegments.toList)).getD []
 
-#guard ["ada", "a b", "a/b", "100%", "x?y#z", "ünï", "../.."].all fun name =>
-  dispatch namePattern nameHandler (served (linkFor namePattern name)) == some name
+#guard ["", ".", ".."].all fun name =>
+  dispatch namePattern nameHandler (served (linkFor namePattern name)) == none
+
+/-- Weighted towards the characters a path segment treats specially. -/
+private local instance : Plausible.Arbitrary Char :=
+  Plausible.Char.arbitraryFromList 3 "./%?#: aZ".toList (by decide)
+
+-- A property, not a theorem: the round trip rests on `Std.Http`'s encoder and decoder, which have
+-- no lemmas relating them.
+#eval Plausible.Testable.check
+  (∀ name : String, dispatch namePattern nameHandler (served (linkFor namePattern name)) =
+    if unlinkable name then none else some name)
+  { numInst := 1000, quiet := true }
 
 end Routing

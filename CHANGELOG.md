@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.0] - 2026-10-06
+
+- Percent-encode `String` captures in generated links.
+- A `String` capture no longer matches an empty, `.` or `..` segment, since no link can carry one.
+- Move to Lean v4.34.1.
+
 ## [0.7.2] - 2026-09-01
 
 Expose the definitions a `route_table` generates, so a route table can be used from another module.

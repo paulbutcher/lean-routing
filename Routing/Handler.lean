@@ -21,6 +21,12 @@ def HandlerType (segs : List PathSeg) (result : Type) : Type :=
   | .lit _ :: rest => HandlerType rest result
   | .capture _ kind :: rest => kind.type → HandlerType rest result
 
+/-- The `String` captures no link can carry as one path segment: a client removes dot segments, even
+percent-encoded ones, before sending a request, and an empty segment is collapsed by many proxies and
+by `pathSegments`. -/
+def unlinkable (s : String) : Bool :=
+  s == "" || s == "." || s == ".."
+
 /-- Matches a decoded request path (`List String`, e.g. from
 `RequestTarget.path.toDecodedSegments`) against `segs`, applying `handler`
 to the extracted, typed capture values as it goes.
@@ -30,14 +36,17 @@ segment for a request path ending in `/` (e.g. `/todos/7/` decodes to `["todos",
 route's own pattern never has a trailing slash of its own to match it structurally. Tolerating it
 here means a directory-style relative reference (e.g. `Routing.relativeUrl`'s `"."`/`".."` case,
 which an RFC 3986-compliant resolver always turns into a trailing-slash URL) actually reaches its
-target instead of 404ing. -/
+target instead of 404ing.
+
+A `.string` capture never matches an `unlinkable` segment, so a capture always has a working link. -/
 def dispatch {result : Type} :
     (segs : List PathSeg) → HandlerType segs result → List String → Option result
   | [], h, [] => some h
   | [], h, [""] => some h
   | .lit s :: rest, h, p :: ps => if s == p then dispatch rest h ps else none
   | .capture _ .nat :: rest, h, p :: ps => p.toNat?.bind (fun n => dispatch rest (h n) ps)
-  | .capture _ .string :: rest, h, p :: ps => dispatch rest (h p) ps
+  | .capture _ .string :: rest, h, p :: ps =>
+    if unlinkable p then none else dispatch rest (h p) ps
   | _, _, _ => none
 
 /-- `String` for a pattern with no captures; otherwise one argument per capture, in order,
@@ -48,8 +57,8 @@ returning the rendered path. -/
   | .capture _ kind :: rest => kind.type → LinkType rest
 
 /-- Builds the `/`-joined path for `segs`, given the literal/rendered-capture parts collected so
-far. A `.string` capture is percent-encoded with the encoder `Std.Http` decodes with, so a value
-holding a `/`, a space or a `%` comes back from `dispatch` as itself rather than as other segments. -/
+far. A `.string` capture is percent-encoded, so the link dispatches back to it unless it is
+`unlinkable`. -/
 def linkParts : (segs : List PathSeg) → List String → LinkType segs
   | [], parts => "/" ++ String.intercalate "/" parts
   | .lit s :: rest, parts => linkParts rest (parts ++ [s])
