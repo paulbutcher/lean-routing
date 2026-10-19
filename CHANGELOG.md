@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+- A `MountPoint` can no longer hold an empty segment, which gave links starting with `//` that name another host; `MountPoint.ofSegs?` returns `none` for one.
+
 ## [0.10.1] - 2026-10-18
 
 - Chore: bump dependencies.

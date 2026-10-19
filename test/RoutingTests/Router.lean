@@ -107,16 +107,30 @@ private def tenantRouter : Router :=
       (MountPoint.ofSegs? ["t", tenant]).map fun root => .mount root [ .get [] (ok tenant) ] }
 
 #guard (MountPoint.ofSegs? ["t", ".."]).isNone
+-- A root starting with an empty segment would give links starting with `//`, to another host.
+#guard (MountPoint.ofSegs? [""]).isNone
+#guard (MountPoint.ofSegs? ["", "admin"]).isNone
+#guard (MountPoint.ofSegs? ["t", ""]).isNone
 
 /--
 error: could not synthesize default value for field 'valid' of 'Routing.MountPoint' using tactics
 ---
 error: Tactic `decide` proved that the proposition
-  (["t", ".."].all fun x => !dotSegment x) = true
+  (["t", ".."].all fun x => !unlinkable x) = true
 is false
 -/
 #guard_msgs in
 example : Entry := .mount { segs := ["t", ".."] } []
+
+/--
+error: could not synthesize default value for field 'valid' of 'Routing.MountPoint' using tactics
+---
+error: Tactic `decide` proved that the proposition
+  (["", "admin"].all fun x => !unlinkable x) = true
+is false
+-/
+#guard_msgs in
+example : Entry := .mount { segs := ["", "admin"] } []
 
 private def siteRouter : Router :=
   { middlewares := [tag "outer", tag "inner"]

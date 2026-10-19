@@ -33,6 +33,12 @@ so no link can reach a route containing one. -/
 def dotSegment (s : String) : Bool :=
   s == "." || s == ".."
 
+/-- A `dotSegment` or an empty segment, which no link can carry. Many proxies collapse an empty one.
+As the last segment it cannot be told from a trailing slash, and as the first it starts the link
+with `//`, which names another host. -/
+def unlinkable (s : String) : Bool :=
+  s == "" || dotSegment s
+
 /-- One segment of a route path pattern: a literal segment to match
 verbatim, or a named, typed capture. -/
 inductive PathSeg where
@@ -162,16 +168,20 @@ def mountSegs : List PathSeg → List PathSeg → List PathSeg
   | pre, [] => pre ++ [.lit ""]
   | pre, segs => pre ++ segs
 
-/-- The literal path prefix a `Router` mount serves, decoded, as a request path is. Like
-`PathSeg.lit`, it takes a proof that no segment is a `dotSegment`, since no request could reach
-one. -/
+/-- The literal path prefix a `Router` mount serves, decoded, as a request path is. It takes a
+proof that no segment is `unlinkable`, since every link under the mount carries them all. -/
 structure MountPoint where
   segs : List String
-  valid : segs.all (!dotSegment ·) := by decide
+  valid : segs.all (!unlinkable ·) := by decide
 
-/-- A mount point at `segs`, unless one of them is a `dotSegment`. -/
+/-- A mount point at `segs`, unless one of them is `unlinkable`. -/
 def MountPoint.ofSegs? (segs : List String) : Option MountPoint :=
-  if h : segs.all (!dotSegment ·) then some ⟨segs, h⟩ else none
+  if h : segs.all (!unlinkable ·) then some ⟨segs, h⟩ else none
+
+theorem MountPoint.noDotSegments (root : MountPoint) : root.segs.all (!dotSegment ·) :=
+  List.all_eq_true.2 fun s hs => by
+    have := List.all_eq_true.1 root.valid s hs
+    simp_all [unlinkable]
 
 /-- `inner` mounted under `outer`. -/
 def MountPoint.append (outer inner : MountPoint) : MountPoint :=

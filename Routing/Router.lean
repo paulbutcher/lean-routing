@@ -50,7 +50,7 @@ def Route.asDirectory : Route result → Route result
 
 /-- `r` under `root`, with the segments `mountSegs` gives. -/
 def Route.under (root : MountPoint) (r : Route result) : Route result :=
-  if root.segs.isEmpty then r else Route.prependLits root.segs root.valid r.asDirectory
+  if root.segs.isEmpty then r else Route.prependLits root.segs root.noDotSegments r.asDirectory
 
 mutual
 /-- The routes an entry serves, in order, each with the full pattern of every mount enclosing it. -/
