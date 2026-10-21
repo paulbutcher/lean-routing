@@ -63,7 +63,8 @@ def main : IO Unit := do
   let hooks ← LeanIn.Runtime.Hooks.new
   let listener ← LeanIn.Runtime.Listener.bind (LeanIn.Runtime.loopback 8080)
   let executor ← LeanIn.Sched.Executor.new LeanIn.Task.Item 256 1
-  let cfg : LeanIn.Http.Server.Config := { clock := LeanIn.Runtime.Clock.live hooks }
+  let cfg : LeanIn.Http.Server.Config :=
+    { h1 := { autoContinue := false }, clock := LeanIn.Runtime.Clock.live hooks }
   let handler := Routing.toStreamHandler routes
   let _ ← LeanIn.Runtime.run executor
     (LeanIn.Runtime.serveForever hooks listener

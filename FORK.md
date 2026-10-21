@@ -9,8 +9,9 @@ remain). The fork keeps the typed patterns, links, matching and route-table code
 - `Routing.Server` no longer imports `Std.Http.Server`. A `Request` is LeanIn's `H1.Head`, parsed
   `RequestTarget`, streaming `BodyReader`, and `Std.Http.Extensions`; a `Response` is a buffered
   status/reason/headers/body value; handlers run in `LeanIn.Runtime.VM`.
-- `StatelessHandler` keeps `onRequest` and the source-compatible `onContinue` field. The native
-  driver does not negotiate `100-continue`; `onContinue` remains for router selection.
+- `StatelessHandler` keeps `onRequest` and `onContinue`. `toStreamHandlerOf` asks `onContinue`
+  when the request expects a `100 Continue`; set the LeanIn config's `h1.autoContinue := false` so
+  the driver leaves the interim response to that decision.
 - `toHandler` is a `LeanIn.Http.Server.StreamHandler`; `serveConnStream` serves it.
 - `Result` is `Request → VM Response`, so route handlers now return `pure` responses rather than
   `ContextAsync (Std.Http.Response …)`.
@@ -33,5 +34,5 @@ matching; serving imports LeanIn and its macro frontend explicitly.
 A public-socket fixture is `tests/server.sh`, and `bench/README.md` records the paired before/after
 run. `toStreamHandler` is the connection adapter; `toHandler` keeps the upstream `StatelessHandler`
 meaning. The routing API remains buffered, as upstream's `Result` is; a streaming route API would be
-an addition rather than a parity item. `100-continue` is sent by LeanIn's H1 driver before dispatch,
-so the router's `onContinue` is used only for sub-router selection.
+an addition rather than a parity item. `100-continue` is router-controlled when `h1.autoContinue` is false; the socket
+fixture checks both the interim and the refusal.

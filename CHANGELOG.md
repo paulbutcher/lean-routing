@@ -8,6 +8,7 @@
 - `Result` is `Request → LeanIn.Runtime.VM Response`; handlers return `pure`.
 - `toHandler` returns a `StatelessHandler`; `toStreamHandler` is the LeanIn connection adapter.
 - `Routing` no longer re-exports the serving modules, preserving the Lean-free guarantee for pure routing.
+- `onContinue` now controls the interim `100 Continue` when `h1.autoContinue` is false (LeanIn 0.5.0).
 
 - Add `decodedPath`, the decoded path segments that routes match a request against.
 
