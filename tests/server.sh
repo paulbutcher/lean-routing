@@ -37,12 +37,12 @@ def exchange(path):
     if path == "/users/7":
         assert first.startswith(b"HTTP/1.1 100 Continue"), first
         s.sendall(b"abc")
-        rest = b""
-        while b"user 7" not in rest:
+        body = first
+        while b"user 7" not in body:
             more = s.recv(4096)
             if not more: break
-            rest += more
-        assert b"HTTP/1.1 200 OK" in rest and b"user 7" in rest, (first, rest)
+            body += more
+        assert b"HTTP/1.1 200 OK" in body and b"user 7" in body, (first, body)
     else:
         body = first
         while b"hello" not in body:
