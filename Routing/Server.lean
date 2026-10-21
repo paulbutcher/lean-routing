@@ -27,6 +27,16 @@ structure Request where
   body : LeanIn.Http.Server.BodyReader
   extensions : Extensions := Extensions.empty
 
+/-- The request metadata, in the shape upstream code reads (`request.line.uri`, `.method`,
+`.version`). -/
+structure RequestLine where
+  method : Method
+  uri : RequestTarget
+  version : LeanIn.Http.H1.Version
+
+def Request.line (r : Request) : RequestLine :=
+  { method := r.method, uri := r.uri, version := r.head.version }
+
 /-- A buffered response returned by a route handler. The router writes it through the connection's
 `ResponseWriter`; a handler that streams will need the writer form, which this cut does not expose. -/
 structure Response where
@@ -122,6 +132,12 @@ def header (r : Response) (name : Header.Name) (value : Header.Value) : Response
 /-- A UTF-8 text body. -/
 def text (r : Response) (s : String) : Response :=
   { r with body := s.toUTF8 }
+
+def plain (r : Response) (s : String) : Response :=
+  r.header (.mk "content-type") (.mk "text/plain; charset=utf-8") |>.text s
+
+def html (r : Response) (s : String) : Response :=
+  r.header (.mk "content-type") (.mk "text/html; charset=utf-8") |>.text s
 
 end Response
 
