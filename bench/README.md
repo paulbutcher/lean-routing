@@ -50,3 +50,19 @@ recorded, so this is provisional, not a performance record.
 The upstream arm's p50 is ~0.9 ms at C=1 and ~4.6 ms at C=8, so its low absolute rate is the
 Std.Http/stock-async serving path, not a routing-dispatch effect. This is a **stack** comparison:
 the router's own matching cost must be measured separately in memory.
+
+## Dispatch cost
+
+`dispatchBench` isolates the router from the socket stack: `parseNs` is one
+`Std.Http.RequestTarget.parse?`, `matchNs` one `matchTable` over 64 routes, and
+`runNs` one full `runRequest` including VM execution of a pure handler.
+
+```
+dispatch|n=200000|parseNs=3|matchNs=2|runNs=796
+```
+
+The parse/match figures are at the timer/optimizer resolution floor and should
+be treated as "small", not exact. The handler run is ~0.8 µs; the server path is
+~77 µs/request at 13k rps, so routing dispatch is roughly 1% of the serving
+cost. The remaining cost is the LeanIn HTTP/VM bridge and response path, not
+route matching.

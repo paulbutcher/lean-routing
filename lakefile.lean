@@ -24,6 +24,9 @@ extern_lib netuv pkg := do
 
 def netuvLinkArgs : Array String := #["-L", ".lake/build/lib", "-lnetuv", "-luv"]
 
+lean_exe dispatchBench where
+  root := `Bench.Dispatch
+
 lean_exe routingServer where
   root := `Examples.Server
   moreLinkArgs := netuvLinkArgs
