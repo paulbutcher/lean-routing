@@ -13,6 +13,18 @@ require leanin from git "https://github.com/scidonia/leanin.git" @ "v0.4.0"
 @[default_target]
 lean_lib Routing
 
+extern_lib netuv pkg := do
+  let srcJob ← inputFile (pkg.dir / "c" / "netuv.c") true
+  let oJob ← buildO (pkg.buildDir / "c" / "netuv.o") srcJob
+    #["-fPIC", s!"-I{← getLeanIncludeDir}"] #["-O2"]
+  buildStaticLib (pkg.buildDir / "lib" / nameToStaticLib "netuv") #[oJob]
+
+def netuvLinkArgs : Array String := #["-L", ".lake/build/lib", "-lnetuv", "-luv"]
+
+lean_exe routingServer where
+  root := `Examples.Server
+  moreLinkArgs := netuvLinkArgs
+
 /-- The tests live in their own package (`test/`) so that nothing they need reaches a
 downstream consumer's dependency graph, which means they can only be run as a child process.
 `scripts/` holds the two checks that keep the Lean package out of a consumer's binary
