@@ -23,3 +23,37 @@ check /users/7 200 "user 7"
 check /blog 200 blog
 check /nope 404 "Not Found"
 echo "server: all checks passed"
+
+python3 - "$port" <<'PY'
+import socket, sys
+port = int(sys.argv[1])
+
+def exchange(path):
+    s = socket.create_connection(("127.0.0.1", port), timeout=5)
+    s.settimeout(2)
+    s.sendall((f"GET {path} HTTP/1.1\r\nHost: x\r\nExpect: 100-continue\r\n"
+               f"Content-Length: 3\r\n\r\n").encode())
+    first = s.recv(4096)
+    if path == "/users/7":
+        assert first.startswith(b"HTTP/1.1 100 Continue"), first
+        s.sendall(b"abc")
+        rest = b""
+        while b"user 7" not in rest:
+            more = s.recv(4096)
+            if not more: break
+            rest += more
+        assert b"HTTP/1.1 200 OK" in rest and b"user 7" in rest, (first, rest)
+    else:
+        body = first
+        while b"hello" not in body:
+            more = s.recv(4096)
+            if not more: break
+            body += more
+        assert b"100 Continue" not in body, body
+        assert b"HTTP/1.1 200 OK" in body and b"hello" in body, body
+    s.close()
+
+exchange("/users/7")
+exchange("/bench")
+print("server: continue policy checks passed")
+PY

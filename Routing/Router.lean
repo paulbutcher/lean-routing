@@ -109,4 +109,7 @@ end
 def Router.toHandler (router : Router) : StatelessHandler :=
   router.compile.handler
 
+def Router.toStreamHandler (router : Router) : LeanIn.Http.Server.StreamHandler :=
+  Routing.toStreamHandlerOf router.toHandler
+
 end Routing

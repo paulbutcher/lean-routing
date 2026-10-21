@@ -197,10 +197,10 @@ def toHandler (routes : List (Route Result)) (notFound : Result := defaultNotFou
     StatelessHandler :=
   { onRequest := fun request => runRequest routes request notFound }
 
-/-- Adapt a router to LeanIn's streaming connection handler. The body is available to handlers
-through `Request.body`; the response is buffered because `Result` carries a `Response` value. -/
-def toStreamHandler (routes : List (Route Result)) (notFound : Result := defaultNotFound) :
-    LeanIn.Http.Server.StreamHandler :=
+/-- Adapt a `StatelessHandler` to LeanIn's streaming connection handler. The body is available to
+handlers through `Request.body`; the response is buffered because `Result` carries a `Response`
+value. When the driver has `autoContinue` off, `onContinue` decides the interim response. -/
+def toStreamHandlerOf (handler : StatelessHandler) : LeanIn.Http.Server.StreamHandler :=
   fun head body writer => do
     match RequestTarget.parse? head.targetString with
     | none =>
@@ -215,12 +215,19 @@ def toStreamHandler (routes : List (Route Result)) (notFound : Result := default
         writer.finish
       | some method =>
         let request : Request := { head, uri, method, body }
-        let response ← runRequest routes request notFound
+        if LeanIn.Http.H1.expectsContinue head && handler.onContinue head then
+          writer.sendContinue
+        let response ← handler.onRequest request
         let headers := if response.headers.any (fun (n, _) => n.toLower == "content-length") then
             response.headers
           else response.headers.push ("content-length", toString response.body.size)
         writer.start { status := response.status, reason := response.reason, headers }
         writer.write response.body
         writer.finish
+
+/-- Adapt a route table to LeanIn's connection handler. -/
+def toStreamHandler (routes : List (Route Result)) (notFound : Result := defaultNotFound) :
+    LeanIn.Http.Server.StreamHandler :=
+  toStreamHandlerOf (toHandler routes notFound)
 
 end Routing
