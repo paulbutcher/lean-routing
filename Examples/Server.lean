@@ -31,7 +31,7 @@ def main (args : List String) : IO UInt32 := do
   IO.println s!"routing server listening on {addr}"
   let prog : LeanIn.Task.EAsync IO.Error Unit :=
     LeanIn.Runtime.serveForever hooks l
-      (LeanIn.Http.Server.serveConnStream cfg · (Routing.toHandler routes))
+      (LeanIn.Http.Server.serveConnStream cfg · (Routing.toStreamHandler routes))
   let outcome : Except IO.Error Unit ← LeanIn.Runtime.run e prog
   LeanIn.Runtime.Io.stop
   match outcome with

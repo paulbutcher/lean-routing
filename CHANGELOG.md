@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-21
+
+- Serve on LeanIn: native `Request`/`Response`/`VM` handlers and a `LeanIn.Http.Server` stream adapter.
+- `Result` is `Request → LeanIn.Runtime.VM Response`; handlers return `pure`.
+- `toHandler` returns a `StatelessHandler`; `toStreamHandler` is the LeanIn connection adapter.
+- `Routing` no longer re-exports the serving modules, preserving the Lean-free guarantee for pure routing.
+
 - Add `decodedPath`, the decoded path segments that routes match a request against.
 
 ## [0.10.1] - 2026-10-18

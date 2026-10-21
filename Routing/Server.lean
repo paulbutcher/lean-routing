@@ -191,9 +191,15 @@ def runRequest (routes : List (Route Result)) (request : Request)
   | some response => response request
   | none => notFound request
 
+/-- Adapt a router to a `StatelessHandler`, preserving the upstream meaning of `toHandler`:
+dispatch, run the matched handler, and return the response. -/
+def toHandler (routes : List (Route Result)) (notFound : Result := defaultNotFound) :
+    StatelessHandler :=
+  { onRequest := fun request => runRequest routes request notFound }
+
 /-- Adapt a router to LeanIn's streaming connection handler. The body is available to handlers
 through `Request.body`; the response is buffered because `Result` carries a `Response` value. -/
-def toHandler (routes : List (Route Result)) (notFound : Result := defaultNotFound) :
+def toStreamHandler (routes : List (Route Result)) (notFound : Result := defaultNotFound) :
     LeanIn.Http.Server.StreamHandler :=
   fun head body writer => do
     match RequestTarget.parse? head.targetString with

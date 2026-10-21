@@ -30,5 +30,8 @@ mounted-index redirect and sub-router `onContinue` selection. Pure pattern/link 
 upstream `leanFree` guarantee still holds for consumers that only need patterns, links and
 matching; serving imports LeanIn and its macro frontend explicitly.
 
-Not yet done: a public-socket fixture (the test package does not link LeanIn's socket shim), and a
-streaming handler form that receives the `ResponseWriter`.
+A public-socket fixture is `tests/server.sh`, and `bench/README.md` records the paired before/after
+run. `toStreamHandler` is the connection adapter; `toHandler` keeps the upstream `StatelessHandler`
+meaning. The routing API remains buffered, as upstream's `Result` is; a streaming route API would be
+an addition rather than a parity item. `100-continue` is sent by LeanIn's H1 driver before dispatch,
+so the router's `onContinue` is used only for sub-router selection.
