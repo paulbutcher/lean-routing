@@ -7,8 +7,6 @@ module
 public import Routing.Pattern
 public import Routing.Handler
 public import Routing.Route
-public import Routing.Server
-public import Routing.Router
 public import Routing.RouteTable
 public import Routing.RouteMount
 public import Routing.RelativeLink
@@ -26,6 +24,11 @@ plain runtime data with no type-level encoding. From that *value*, `HandlerType 
 `Route`/`dispatchTable` (`Routing/Route.lean`) bundle a method, pattern, and handler into a table
 tried in order. `matchTable` adds the identity of the route that matched, which `toHandler`
 (`Routing/Server.lean`) publishes for a wrapping middleware to read back.
+
+The serving layer is **not** in this aggregate. `Routing.Server` and `Routing.Router` import
+LeanIn and its macro frontend; consumers that only need patterns, links and matching keep the
+upstream Lean-free guarantee by importing `Routing` alone. Import `Routing.Server` (and
+`Routing.Router`) explicitly to serve.
 
 A `route_table` row can `mount` another table under a literal path prefix
 (`Routing/RouteTable.lean`); `mount_routes` (`Routing/RouteMount.lean`) does the same for a list of

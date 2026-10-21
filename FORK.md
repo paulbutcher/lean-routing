@@ -26,5 +26,9 @@ is a breaking change).
 `toHandler` through `Routing.runRequest`; they check matched-route publication, 404 absence, the
 mounted-index redirect and sub-router `onContinue` selection. Pure pattern/link tests are unchanged.
 
+`Routing` (the aggregate) deliberately excludes `Routing.Server` and `Routing.Router`, so the
+upstream `leanFree` guarantee still holds for consumers that only need patterns, links and
+matching; serving imports LeanIn and its macro frontend explicitly.
+
 Not yet done: a public-socket fixture (the test package does not link LeanIn's socket shim), and a
 streaming handler form that receives the `ResponseWriter`.
