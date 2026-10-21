@@ -172,11 +172,11 @@ def matchedPattern? (extensions : Extensions) : Option String :=
   (matchedRoute? extensions).map (·.template)
 
 /-- Whether a request for `path` would match one of `routes` with a trailing slash added. -/
-def wantsSlash (routes : List (Route Result)) (method : Method) (path : List String) : Bool :=
+def wantsSlash {result : Type} (routes : List (Route result)) (method : Method) (path : List String) : Bool :=
   path.getLast? != some "" && (matchTable routes method (path ++ [""])).isSome
 
 /-- Where to redirect a request that matched no route but `wantsSlash`. -/
-def slashRedirect? (routes : List (Route Result)) (method : Method) (target : RequestTarget)
+def slashRedirect? {result : Type} (routes : List (Route result)) (method : Method) (target : RequestTarget)
     (path : List String) : Option Header.Value :=
   if wantsSlash routes method path then
     let query := target.query

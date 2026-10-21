@@ -13,6 +13,9 @@ require leanin from git "https://github.com/scidonia/leanin.git" @ "v0.5.0"
 @[default_target]
 lean_lib Routing
 
+lean_lib RoutingJson where
+  globs := #[.submodules `Extras]
+
 extern_lib netuv pkg := do
   let srcJob ← inputFile (pkg.dir / "c" / "netuv.c") true
   let oJob ← buildO (pkg.buildDir / "c" / "netuv.o") srcJob
