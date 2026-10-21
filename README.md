@@ -1,3 +1,7 @@
+> **LeanIn fork.** This branch replaces the `Std.Http.Server` serving layer with LeanIn. The router,
+> patterns, links and route tables are unchanged; handlers run in `LeanIn.Runtime.VM`, and the router
+> is served through `LeanIn.Http.Server`. See [`FORK.md`](FORK.md).
+
 # Routing
 
 A typed HTTP router for Lean 4 / [`Std.Http`](https://leanprover-community.github.io/mathlib4_docs/Std/Http.html). Route patterns like `"/users/:id:Nat"` determine the exact type your handler must have; a wrong-arity or wrong-type handler is a compile error, not a runtime bug.

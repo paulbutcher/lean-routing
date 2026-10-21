@@ -23,7 +23,7 @@ def itemRoute : Route String :=
 
 -- The coercion a table generates reaches here, so its `patterns` names a mount point.
 def leafMount : Entry :=
-  .mount App.patterns.leaf [ .get Leaf.patterns.index fun _ => Std.Http.Response.ok.text "leaf" ]
+  .mount App.patterns.leaf [ .get Leaf.patterns.index fun _ => pure (Response.ok.text "leaf") ]
 
 -- Each field of a mount's `Links` is `linkFor` of the prefixed segments, checked against the
 -- mounted table's own field type, which is `LinkType` of the unprefixed ones.
