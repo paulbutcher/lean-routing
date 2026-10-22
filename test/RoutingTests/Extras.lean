@@ -60,7 +60,7 @@ private def appendBody (r : IO.Ref Captured) (bs : ByteArray) : LeanIn.Runtime.V
       w.write "stream".toUTF8
       w.finish
   let request ← requestFor "/stream"
-  let some action := Streaming.respond? [route] request writer
+  let some action := Streaming.respond? (RouteIndex.of [route]) request writer
     | throw (IO.userError "streaming route did not match")
   runVM action
   let got ← captured.get

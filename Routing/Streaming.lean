@@ -20,9 +20,9 @@ def notFound : Result := fun _ w => do
   w.write "Not Found".toUTF8
   w.finish
 
-def respond? (routes : List (Route Result)) (request : Request)
+def respond? (routes : RouteIndex Result) (request : Request)
     (w : LeanIn.Http.Server.ResponseWriter) : Option (LeanIn.Runtime.VM Unit) :=
-  match matchTable routes request.method (decodedPath request.uri) with
+  match routes.matchTable request.method (decodedPath request.uri) with
   | some (matched, handler) =>
     some (handler { request with extensions := request.extensions.insert matched } w)
   | none =>
@@ -32,6 +32,7 @@ def respond? (routes : List (Route Result)) (request : Request)
 
 def toStreamHandler (routes : List (Route Result)) (missing : Result := notFound) :
     LeanIn.Http.Server.StreamHandler :=
+  let index := RouteIndex.of routes
   fun head body writer => do
     match Std.Http.RequestTarget.parse? head.targetString with
     | none =>
@@ -44,7 +45,7 @@ def toStreamHandler (routes : List (Route Result)) (missing : Result := notFound
         writer.finish
       | some method =>
         let request : Request := { head, uri, method, body }
-        match respond? routes request writer with
+        match respond? index request writer with
         | some action => action
         | none => missing request writer
 

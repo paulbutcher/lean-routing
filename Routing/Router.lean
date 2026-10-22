@@ -71,21 +71,21 @@ private structure Compiled where
 mutual
 private def Router.compile : Router → Compiled
   | { middlewares, routes, routers, fallback } =>
-    let flat := Entry.listToRoutes routes
+    let index := RouteIndex.of (Entry.listToRoutes routes)
     let roots := routes.filterMap fun
       | .mount root _ => some root.segs
       | .route _ => none
     let subs := Router.compileAll routers
     let fallback : StatelessHandler := fallback.getD (Handler.ofFn (fun r => Response.notFound.text "Not Found"))
     let own (method : Method) (path : List String) : Bool :=
-      (matchTable flat method path).isSome || wantsSlash flat method path
+      (index.matchTable method path).isSome || wantsSlash index method path
     let next (method : Method) (path : List String) : StatelessHandler :=
       match subs.find? (·.takes method path) with
       | some sub => sub.handler
       | none => fallback
     let inner : StatelessHandler :=
       { onRequest := fun request =>
-          match respond? flat request with
+          match respond? index request with
           | some response => response request
           | none => (next request.method (decodedPath request.uri)) request
         onContinue := fun head =>

@@ -8,6 +8,7 @@ public import LeanIn.Http.Server
 public import LeanIn.Http.H1
 public import Std.Http.Data
 public import Routing.Route
+public import Routing.Trie
 
 public section
 
@@ -171,12 +172,15 @@ def matchedRoute? (extensions : Extensions) : Option MatchedRoute :=
 def matchedPattern? (extensions : Extensions) : Option String :=
   (matchedRoute? extensions).map (·.template)
 
-/-- Whether a request for `path` would match one of `routes` with a trailing slash added. -/
-def wantsSlash {result : Type} (routes : List (Route result)) (method : Method) (path : List String) : Bool :=
-  path.getLast? != some "" && (matchTable routes method (path ++ [""])).isSome
+/-- Whether a request for `path` would match one of `routes` with a trailing slash added, as a
+mounted index does (`mountSegs`, `Pattern.lean`). -/
+def wantsSlash (routes : RouteIndex result) (method : Method) (path : List String) : Bool :=
+  path.getLast? != some "" && (routes.matchTable method (path ++ [""])).isSome
 
-/-- Where to redirect a request that matched no route but `wantsSlash`. -/
-def slashRedirect? {result : Type} (routes : List (Route result)) (method : Method) (target : RequestTarget)
+/-- Where to redirect a request that matched no route but `wantsSlash`: its target with the slash
+added, query intact. Serving the slashless form instead would break relative links from that
+page. -/
+def slashRedirect? (routes : RouteIndex result) (method : Method) (target : RequestTarget)
     (path : List String) : Option Header.Value :=
   if wantsSlash routes method path then
     let query := target.query
@@ -189,10 +193,11 @@ def slashRedirect? {result : Type} (routes : List (Route result)) (method : Meth
 def decodedPath (target : RequestTarget) : List String :=
   target.path.toDecodedSegments.toList
 
-/-- Dispatch and apply the matched handler; `none` if no route matched and no slash redirect applies. -/
-def respond? (routes : List (Route Result)) (request : Request) : Option Result :=
+/-- Dispatch and apply the matched handler; `none` if no route matched and no slash redirect applies.
+The index is built once, by `toHandler` or `runRequest`'s caller. -/
+def respond? (routes : RouteIndex Result) (request : Request) : Option Result :=
   let path := decodedPath request.uri
-  match matchTable routes request.method path with
+  match routes.matchTable request.method path with
   | some (matched, handler) => some fun request => do
       let response ← handler { request with extensions := request.extensions.insert matched }
       return { response with extensions := response.extensions.insert matched }
@@ -200,18 +205,24 @@ def respond? (routes : List (Route Result)) (request : Request) : Option Result 
       (slashRedirect? routes request.method request.uri path).map fun location =>
         fun _ => pure (((Response.withStatus .permanentRedirect).header .location location).text "")
 
-/-- Run a request through the router and return its response. -/
-def runRequest (routes : List (Route Result)) (request : Request)
+/-- Run a request through an existing index. -/
+def runRequestAt (routes : RouteIndex Result) (request : Request)
     (notFound : Result := defaultNotFound) : LeanIn.Runtime.VM Response :=
   match respond? routes request with
   | some response => response request
   | none => notFound request
 
+/-- Run a list of routes through a freshly built index. -/
+def runRequest (routes : List (Route Result)) (request : Request)
+    (notFound : Result := defaultNotFound) : LeanIn.Runtime.VM Response :=
+  runRequestAt (RouteIndex.of routes) request notFound
+
 /-- Adapt a router to a `StatelessHandler`, preserving the upstream meaning of `toHandler`:
-dispatch, run the matched handler, and return the response. -/
+dispatch, run the matched handler, and return the response. The index is built once here. -/
 def toHandler (routes : List (Route Result)) (notFound : Result := defaultNotFound) :
     StatelessHandler :=
-  { onRequest := fun request => runRequest routes request notFound }
+  let index := RouteIndex.of routes
+  { onRequest := fun request => runRequestAt index request notFound }
 
 /-- Adapt a `StatelessHandler` to LeanIn's streaming connection handler. The body is available to
 handlers through `Request.body`; the response is buffered because `Result` carries a `Response`

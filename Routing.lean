@@ -7,6 +7,7 @@ module
 public import Routing.Pattern
 public import Routing.Handler
 public import Routing.Route
+public import Routing.Trie
 public import Routing.RouteTable
 public import Routing.RouteMount
 public import Routing.RelativeLink
@@ -23,7 +24,9 @@ plain runtime data with no type-level encoding. From that *value*, `HandlerType 
 
 `Route`/`dispatchTable` (`Routing/Route.lean`) bundle a method, pattern, and handler into a table
 tried in order. `matchTable` adds the identity of the route that matched, which `toHandler`
-(`Routing/Server.lean`) publishes for a wrapping middleware to read back.
+(`Routing/Server.lean`) publishes for a wrapping middleware to read back. `toHandler` and `Router`
+find that route with a trie built once over the table (`Routing/Trie.lean`). It picks the route
+`matchTable` would, without trying every one.
 
 The serving layer is **not** in this aggregate. `Routing.Server` and `Routing.Router` import
 LeanIn and its macro frontend; consumers that only need patterns, links and matching keep the
