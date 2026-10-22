@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+- `route_table` rejects a row whose pattern matches the same paths as an earlier row's.
+
 ## [0.11.0] - 2026-10-22
 
 - Add `decodedPath`, the decoded path segments that routes match a request against.

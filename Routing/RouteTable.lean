@@ -253,6 +253,17 @@ elab_rules : command
         throwErrorAt name s!"route name '{name.getId}' already declared at {prior}"
       seen := seen.insert name.getId name
 
+    -- Reject a pattern another row already matches; capture names don't change what matches.
+    let mut seenPatterns : Std.HashMap String String := {}
+    for (_, kind) in entries do
+      if let .leaf pat := kind then
+        let segs ← parseSegsOrThrow pat
+        let key := renderPattern (segs.map fun | .capture _ k => .capture "" k | seg => seg)
+        if let some prior := seenPatterns[key]? then
+          throwErrorAt pat
+            s!"route pattern {pat.getString.quote} matches the same paths as {prior.quote}"
+        seenPatterns := seenPatterns.insert key pat.getString
+
     -- Compute each row's field type/value source once here (`rowGenFor`), reused below by both
     -- `Patterns` (3/4) and `Links` (5/6), rather than each recomputing it separately.
     let env ← getEnv

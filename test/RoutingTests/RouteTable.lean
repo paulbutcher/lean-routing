@@ -37,6 +37,16 @@ route_table RouteTableTestDup
   [ index := "/",
     index := "/elsewhere" ]
 
+-- Negative-compile regression: two rows whose patterns differ only in capture names would leave
+-- the later one unreachable.
+/--
+error: route pattern "/todos/:n:Nat" matches the same paths as "/todos/:id:Nat"
+-/
+#guard_msgs in
+route_table RouteTableTestSamePattern
+  [ first := "/todos/:id:Nat",
+    second := "/todos/:n:Nat" ]
+
 -- Negative-compile regression: a malformed pattern string is a command-time error at the row
 -- that declares it (`segsSrcFor`, `RouteTable.lean`), not a silently-accepted bad route.
 /--
