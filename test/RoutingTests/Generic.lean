@@ -21,9 +21,18 @@ def nativeRoutes : List (Route Result) := sharedRoutes
 /-- The stock instantiation. -/
 def stockRoutes : List (Route Stock.Result) := sharedRoutes
 
-def nativeHandler : StatelessHandler := toHandler nativeRoutes
+/-- One middleware source, polymorphic in host monad and request body. -/
+def withContractHeader {m : Type → Type} [Monad m] {ReqBody : Type}
+    (h : StatelessHandlerM m ReqBody) : StatelessHandlerM m ReqBody :=
+  { h with
+    onRequest := fun request => do
+      let response ← h.onRequest request
+      return { response with headers := response.headers.push ("x-contract", "yes") } }
 
-def stockHandler : Std.Http.Server.StatelessHandler := Stock.toStatelessHandler stockRoutes
+def nativeHandler : StatelessHandler := withContractHeader (toHandler nativeRoutes)
+
+def stockHandler : Std.Http.Server.StatelessHandler :=
+  Stock.toStatelessHandlerOf (withContractHeader (toHandlerM stockRoutes))
 
 private def emptyBody : LeanIn.Http.Server.BodyReader :=
   { recv := fun _ => pure none, drained := pure true, leftover := pure .empty }
@@ -42,12 +51,13 @@ private def runVM (m : LeanIn.Runtime.VM α) : IO α := do
     | throw (IO.userError "bad target")
   let line : Std.Http.Request.Head := { method := .get, version := .v11, uri }
   let native ← runVM (nativeHandler.onRequest { line, body := emptyBody })
-  unless native.status == 200 do
-    throw (IO.userError s!"native status {native.status}")
+  unless native.status == 200 && native.headers.any (·.1 == "x-contract") do
+    throw (IO.userError s!"native status/header {native.status} {native.headers}")
   Async.block <| ContextAsync.run do
     let body ← Std.Http.Body.mkStream
     let response ← stockHandler.onRequest { line, body }
-    unless response.line.status == .ok do
-      throw (IO.userError s!"stock status {response.line.status}")
+    unless response.line.status == .ok &&
+        response.line.headers.contains (Header.Name.ofString! "x-contract") do
+      throw (IO.userError s!"stock status/header {response.line.status}")
 
 end RoutingTests.Generic

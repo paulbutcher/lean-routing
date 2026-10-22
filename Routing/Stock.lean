@@ -37,15 +37,20 @@ def responseOf (response : Response) : ContextAsync (Std.Http.Response Body.Any)
       headers := headersOf response.headers }
   return { line, body := Std.Http.Body.Any.ofBody body, extensions := response.extensions }
 
+/-- Serve a generic stock handler on `Std.Http.Server`. -/
+def toStatelessHandlerOf (handler : StatelessHandlerM ContextAsync Body.Stream) :
+    Std.Http.Server.StatelessHandler :=
+  { onRequest := fun request => do
+      let response ← handler.onRequest
+        { line := request.line, body := request.body, extensions := request.extensions }
+      responseOf response
+    onContinue := fun head => pure (handler.onContinue head) }
+
 /-- Serve a route table on `Std.Http.Server`. -/
 def toStatelessHandler (routes : List (Route Result))
     (notFound : Result := fun _ => pure (Response.notFound.text "Not Found")) :
     Std.Http.Server.StatelessHandler :=
-  { onRequest := fun request => do
-      let response ← runRequestM routes
-        { line := request.line, body := request.body, extensions := request.extensions }
-        notFound
-      responseOf response }
+  toStatelessHandlerOf (toHandlerM routes notFound)
 
 end Routing.Stock
 end
