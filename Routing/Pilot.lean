@@ -75,5 +75,46 @@ def staticFileDeferred {m : Type → Type} [Monad m] [MonadLift IO m] {ReqBody :
         let data ← monadLift (IO.FS.readBinFile path : IO ByteArray)
         sendChunks data 65536 send 0).header "content-type" contentType) }
 
+
+private def multipartBoundary (headers : Std.Http.Headers) : Option String :=
+  match headers.get? (Std.Http.Header.Name.ofString! "content-type") with
+  | none => none
+  | some contentType =>
+  (contentType.value.splitOn ";").findSome? fun part =>
+    let part := part.trimAscii.toString
+    if part.startsWith "boundary=" then
+      let value := (part.drop 9).toString
+      some (if value.startsWith "\"" && value.endsWith "\"" then
+              (value.drop 1).dropRight 1 |>.toString
+            else value)
+    else none
+
+private def partField (part : String) : Option (String × String) :=
+  match part.splitOn "\r\n\r\n" with
+  | headers :: rest@(_ :: _) =>
+    let value := (String.intercalate "\r\n\r\n" rest).trimAscii.toString
+    let name? : Option String := (headers.splitOn ";").findSome? fun piece =>
+      let piece := piece.trimAscii.toString
+      if piece.startsWith "name=" then
+        let raw := (piece.drop 5).toString
+        some (if raw.startsWith "\"" && raw.endsWith "\"" then
+                String.ofList ((raw.drop 1).toString.toList.dropLast)
+              else raw)
+      else none
+    name?.map fun name => (name, value)
+  | _ => none
+
+/-- Read a bounded `multipart/form-data` body and return its named field values. This is a field
+pilot: it does not treat file parts specially, and it buffers the bounded body before parsing. -/
+def multipartFields {m : Type → Type} [Monad m] [MonadExcept IO.Error m] {ReqBody : Type}
+    [Body.RequestBody m ReqBody] (request : RequestM ReqBody) (maximum : Nat := 1048576) :
+    m (List (String × String)) := do
+  let some boundary := multipartBoundary request.line.headers
+    | throw (.userError "routing: multipart request has no boundary")
+  let data ← Body.readAll (m := m) request.body (some maximum)
+  let some text := String.fromUTF8? data
+    | throw (.userError "routing: multipart body is not UTF-8")
+  return (text.splitOn ("--" ++ boundary)).filterMap partField
+
 end Routing
 end
