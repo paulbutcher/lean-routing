@@ -31,8 +31,9 @@ is a breaking change).
 the line once, and run `toHandler` through `Routing.runRequest`; they check matched-route
 publication, 404 absence, the mounted-index redirect and sub-router `onContinue` selection.
 `test/RoutingTests/Generic.lean` compiles one route declaration at both `Result` and
-`Stock.Result`, and runs both handlers for `/hello`; it checks the native 200 and the stock
-`Status.ok`. Pure pattern/link tests are unchanged.
+`Stock.Result`, and runs both handlers for `/hello`; it checks status, body and the shared
+`x-contract` header. `Routing.withRouteHeader` adds the matched template as `x-route` on both
+hosts. Pure pattern/link tests are unchanged.
 
 `Routing` (the aggregate) deliberately excludes `Routing.Server` and `Routing.Router`, so the
 upstream `leanFree` guarantee still holds for consumers that only need patterns, links and
