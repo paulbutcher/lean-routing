@@ -30,11 +30,12 @@ def withContractHeader {m : Type → Type} [Monad m] {ReqBody : Type}
       let response ← h.onRequest request
       return { response with headers := response.headers.push ("x-contract", "yes") } }
 
-def nativeHandler : StatelessHandler :=
-  withRouteHeader (withContractHeader (toHandler nativeRoutes))
+def nativeHandler (store : SessionStore) : StatelessHandler :=
+  withSession store (withRouteHeader (withContractHeader (toHandler nativeRoutes)))
 
-def stockHandler : Std.Http.Server.StatelessHandler :=
-  Stock.toStatelessHandlerOf (withRouteHeader (withContractHeader (toHandlerM stockRoutes)))
+def stockHandler (store : SessionStore) : Std.Http.Server.StatelessHandler :=
+  Stock.toStatelessHandlerOf
+    (withSession store (withRouteHeader (withContractHeader (toHandlerM stockRoutes))))
 
 private def emptyBody : LeanIn.Http.Server.BodyReader :=
   { recv := fun _ => pure none, drained := pure true, leftover := pure .empty }
@@ -52,20 +53,24 @@ private def runVM (m : LeanIn.Runtime.VM α) : IO α := do
   let some uri := RequestTarget.parse? "/hello"
     | throw (IO.userError "bad target")
   let line : Std.Http.Request.Head := { method := .get, version := .v11, uri }
-  let native ← runVM (nativeHandler.onRequest { line, body := emptyBody })
+  let store ← SessionStore.new
+  let native ← runVM ((nativeHandler store).onRequest { line, body := emptyBody })
   unless native.status == 200 && native.headers.any (·.1 == "x-contract") &&
       native.headers.any (fun (n, v) => n == "x-route" && v == "/hello") &&
+      native.headers.any (fun (n, v) => n == "set-cookie" && v.startsWith "session=") &&
       native.body == "hello".toUTF8 do
     throw (IO.userError s!"native status/header/body {native.status} {native.headers}")
   Async.block <| ContextAsync.run do
     let body ← Std.Http.Body.mkStream
-    let response ← stockHandler.onRequest { line, body }
+    let response ← (stockHandler store).onRequest { line, body }
     let chunk ← Std.Http.Body.recv response.body
     let bytes := chunk.map (·.data) |>.getD .empty
     let route := response.line.headers.get? (Header.Name.ofString! "x-route")
     unless response.line.status == .ok &&
         response.line.headers.contains (Header.Name.ofString! "x-contract") &&
         route.map (·.value) == some "/hello" &&
+        (response.line.headers.get? (Header.Name.ofString! "set-cookie")).any
+          (fun v => v.value.startsWith "session=") &&
         bytes == "hello".toUTF8 do
       throw (IO.userError s!"stock status/header/body {response.line.status} {bytes}")
 
