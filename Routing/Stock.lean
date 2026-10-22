@@ -29,19 +29,26 @@ def statusOfNat (n : Nat) (reason : String) : Status :=
     | some custom => .other custom
     | none => .internalServerError
 
-def headersOf (headers : Array (String × String)) : Std.Http.Headers :=
-  headers.foldl (fun acc (name, value) =>
-    match Header.Name.ofString? name, Header.Value.ofString? value with
-    | some n, some v => acc.insert n v
-    | _, _ => acc) .empty
+def headersOf (headers : Array (String × String)) : Except IO.Error Std.Http.Headers := do
+  let mut acc := Std.Http.Headers.empty
+  for (name, value) in headers do
+    let some n := Header.Name.ofString? name
+      | throw (.userError s!"routing: invalid response header name {name.quote}")
+    let some v := Header.Value.ofString? value
+      | throw (.userError s!"routing: invalid response header value {value.quote}")
+    acc := acc.insert n v
+  return acc
 
 /-- Convert a buffered routing response to the stock response type. -/
 def responseOf (response : Response) : ContextAsync (Std.Http.Response Body.Any) := do
   let body ← (Std.Http.Body.Full.ofByteArray response.body : Async Body.Full)
+  let headers ← match headersOf response.headers with
+    | .ok headers => pure headers
+    | .error e => throw e
   let line : Std.Http.Response.Head :=
     { status := statusOfNat response.status response.reason
       version := .v11
-      headers := headersOf response.headers }
+      headers }
   return { line, body := Std.Http.Body.Any.ofBody body, extensions := response.extensions }
 
 /-- Serve a generic stock handler on `Std.Http.Server`. -/

@@ -51,13 +51,17 @@ private def runVM (m : LeanIn.Runtime.VM α) : IO α := do
     | throw (IO.userError "bad target")
   let line : Std.Http.Request.Head := { method := .get, version := .v11, uri }
   let native ← runVM (nativeHandler.onRequest { line, body := emptyBody })
-  unless native.status == 200 && native.headers.any (·.1 == "x-contract") do
-    throw (IO.userError s!"native status/header {native.status} {native.headers}")
+  unless native.status == 200 && native.headers.any (·.1 == "x-contract") &&
+      native.body == "hello".toUTF8 do
+    throw (IO.userError s!"native status/header/body {native.status} {native.headers}")
   Async.block <| ContextAsync.run do
     let body ← Std.Http.Body.mkStream
     let response ← stockHandler.onRequest { line, body }
+    let chunk ← Std.Http.Body.recv response.body
+    let bytes := chunk.map (·.data) |>.getD .empty
     unless response.line.status == .ok &&
-        response.line.headers.contains (Header.Name.ofString! "x-contract") do
-      throw (IO.userError s!"stock status/header {response.line.status}")
+        response.line.headers.contains (Header.Name.ofString! "x-contract") &&
+        bytes == "hello".toUTF8 do
+      throw (IO.userError s!"stock status/header/body {response.line.status} {bytes}")
 
 end RoutingTests.Generic
