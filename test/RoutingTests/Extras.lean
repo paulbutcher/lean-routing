@@ -47,6 +47,7 @@ private def appendBody (r : IO.Ref Captured) (bs : ByteArray) : LeanIn.Runtime.V
   let captured ← IO.mkRef ({} : Captured)
   let writer : LeanIn.Http.Server.ResponseWriter :=
     { sendContinue := pure ()
+      interim := fun _ => pure ()
       start := fun (rh : LeanIn.Http.H1.ResponseHead) => setStatus captured rh.status
       write := fun (bs : ByteArray) => appendBody captured bs
       finish := pure ()
