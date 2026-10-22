@@ -4,7 +4,7 @@ the matched-route extension `toHandlerM` publishes and exposes the template as a
 -/
 module
 
-public import Routing.Server
+public import Routing.BodyHandler
 
 public section
 
@@ -47,6 +47,14 @@ def withSession {m : Type → Type} [Monad m] [MonadLift IO m] {ReqBody : Type}
           pure s!"s{n}"
       let response ← next.onRequest request
       pure { response with headers := response.headers.push ("set-cookie", s!"session={id}") } }
+
+/-- A buffered static-file handler; the body capability can later stream it. -/
+def staticFile {m : Type → Type} [Monad m] [MonadLift IO m] {ReqBody : Type}
+    (path : System.FilePath) (contentType : String := "application/octet-stream") :
+    BodyHandlerM m ReqBody :=
+  { onRequest := fun _ => do
+      let data ← monadLift (IO.FS.readBinFile path : IO ByteArray)
+      pure ((ResponseM.bytes data).header "content-type" contentType) }
 
 end Routing
 end
