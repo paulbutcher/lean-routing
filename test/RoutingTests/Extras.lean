@@ -12,17 +12,16 @@ deriving Lean.ToJson
 open Std.Http
 
 private def requestFor (target : String) : IO Request := do
-  let some method := Method.ofString? "GET"
-    | throw (IO.userError "bad method")
-  let some uri := RequestTarget.parse? target
-    | throw (IO.userError "bad target")
   let raw := s!"GET {target} HTTP/1.1\r\nHost: x\r\n\r\n".toUTF8
   let head ← match LeanIn.Http.H1.parseHead raw 0 {} with
     | .ok head _ => pure head
     | _ => throw (IO.userError "bad head")
+  let line ← match LeanIn.Http.StdHandler.headToStock head with
+    | .ok line => pure line
+    | .error e => throw e
   let body : LeanIn.Http.Server.BodyReader :=
     { recv := fun _ => pure none, drained := pure true, leftover := pure .empty }
-  return { head, uri, method, body }
+  return { line, body }
 
 private structure Captured where
   status : Option Nat := none

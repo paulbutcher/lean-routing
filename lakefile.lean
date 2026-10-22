@@ -8,7 +8,7 @@ open Lake DSL
 package routing where
   version := v!"0.11.0"
 
-require leanin from git "https://github.com/scidonia/leanin.git" @ "v0.6.0"
+require leanin from git "https://github.com/scidonia/leanin.git" @ "028ca6a04a0894fbbcad3aa519ca790393da1bad"
 
 @[default_target]
 lean_lib Routing

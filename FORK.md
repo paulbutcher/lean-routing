@@ -6,26 +6,34 @@ remain). The fork keeps the typed patterns, links, matching and route-table code
 
 ## What changed
 
-- `Routing.Server` no longer imports `Std.Http.Server`. A `Request` is LeanIn's `H1.Head`, parsed
-  `RequestTarget`, streaming `BodyReader`, and `Std.Http.Extensions`; a `Response` is a buffered
-  status/reason/headers/body value; handlers run in `LeanIn.Runtime.VM`.
-- `StatelessHandler` keeps `onRequest` and `onContinue`. `toStreamHandlerOf` asks `onContinue`
-  when the request expects a `100 Continue`; set the LeanIn config's `h1.autoContinue := false` so
-  the driver leaves the interim response to that decision.
-- `toHandler` is a `LeanIn.Http.Server.StreamHandler`; `serveConnStream` serves it.
-- `Result` is `Request → VM Response`, so route handlers now return `pure` responses rather than
-  `ContextAsync (Std.Http.Response …)`.
-- `Std.Http` remains only for independent data types: `Method`, `Status`, `Header`, `Extensions`,
-  `RequestTarget`.
+- `Routing.Server` no longer imports `Std.Http.Server`. A `RequestM Body` carries a
+  `Std.Http.Request.Head`, a body of the host's type, and `Std.Http.Extensions`; `Request` aliases
+  LeanIn's `BodyReader`. A `Response` remains a buffered status/reason/headers/body value.
+- `ResultM m ReqBody` and `StatelessHandlerM m ReqBody` parameterize the computation and request
+  body. `Result` and `StatelessHandler` remain the native `VM`/`BodyReader` aliases, so existing
+  route declarations are unchanged.
+- `toStreamHandlerOf` converts the parsed H1 head to `Std.Http.Request.Head` at dispatch and asks
+  `onContinue` with that shared line. Set the LeanIn config's `h1.autoContinue := false` so the
+  driver leaves the interim response to the decision.
+- `toHandlerM`, `runRequestM` and `respond?M` are the generic dispatch path; the native names are
+  aliases. `Routing.Stock.toStatelessHandler` instantiates the same route source at
+  `ContextAsync`/`Body.Stream` and converts the buffered response to `Std.Http.Response Body.Any`.
+- `Std.Http` remains the metadata surface: `Method`, `Status`, `Header`, `Extensions`,
+  `RequestTarget` and now `Request.Head`.
+- The streaming extension (`Routing.Streaming`) remains native and uses the same converted line.
 
-Dependency: `scidonia/leanin @ "v0.4.0"`. Package version is `0.11.0` (the handler/result surface
+Dependency: `scidonia/leanin @ "028ca6a"`. Package version is `0.11.0` (the handler/result surface
 is a breaking change).
 
 ## Tests
 
-`test/RoutingTests/Server.lean` and `Router.lean` build native requests from `H1.parseHead` and run
-`toHandler` through `Routing.runRequest`; they check matched-route publication, 404 absence, the
-mounted-index redirect and sub-router `onContinue` selection. Pure pattern/link tests are unchanged.
+`test/RoutingTests/Server.lean` and `Router.lean` build native requests from `H1.parseHead`, convert
+the line once, and run `toHandler` through `Routing.runRequest`; they check matched-route
+publication, 404 absence, the mounted-index redirect and sub-router `onContinue` selection.
+`test/RoutingTests/Generic.lean` compiles one route declaration at both `Result` and
+`Stock.Result`, and runs both handlers for `/hello`; it checks status, body and the shared
+`x-contract` header. `Routing.withRouteHeader` adds the matched template as `x-route` on both
+hosts. Pure pattern/link tests are unchanged.
 
 `Routing` (the aggregate) deliberately excludes `Routing.Server` and `Routing.Router`, so the
 upstream `leanFree` guarantee still holds for consumers that only need patterns, links and

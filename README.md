@@ -52,6 +52,18 @@ def app : StatelessHandler := [
 
 Unmatched requests get a default `404 Not Found`; pass `notFound := ...` to `toHandler` to override it.
 
+The handler/result layer is parameterized:
+
+```lean
+abbrev ResultM (m : Type → Type) (ReqBody : Type) := RequestM ReqBody → m Response
+abbrev Result := ResultM LeanIn.Runtime.VM LeanIn.Http.Server.BodyReader
+```
+
+Route tables can stay at `Result`, or be written generically and instantiated at
+`Routing.Stock.Result` (`ContextAsync`/`Body.Stream`) and served with
+`Routing.Stock.toStatelessHandler`. The stock adapter converts the buffered `Response` to
+`Std.Http.Response Body.Any`; the native adapter writes it through `ResponseWriter`.
+
 ### 3. Wire into a server
 
 ```lean

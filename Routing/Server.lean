@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import LeanIn.Http.Server
+public import LeanIn.Http.StdHandler
 public import LeanIn.Http.H1
 public import Std.Http.Data
 public import Routing.Route
@@ -19,24 +20,19 @@ namespace Routing
 open Std.Http (Method Status Header Extensions RequestTarget)
 open LeanIn.Http
 
-/-- A request as the LeanIn backend sees it: the parsed head, the streaming body, the parsed target,
-and the typed extensions routes and middleware share. -/
-structure Request where
-  head : H1.Head
-  uri : RequestTarget
-  method : Method
-  body : LeanIn.Http.Server.BodyReader
-  extensions : Extensions := Extensions.empty
+/-- A request over a host body type. The line is `Std.Http` metadata in both hosts; the native
+adapter converts the parsed H1 head once at dispatch. -/
+structure RequestM (Body : Type) where
+  line : Std.Http.Request.Head
+  body : Body
+  extensions : Std.Http.Extensions := .empty
 
-/-- The request metadata, in the shape upstream code reads (`request.line.uri`, `.method`,
+/-- The native request: LeanIn's streaming body reader. -/
+abbrev Request := RequestM LeanIn.Http.Server.BodyReader
+
+/-- The request line, in the shape upstream code reads (`request.line.uri`, `.method`,
 `.version`). -/
-structure RequestLine where
-  method : Method
-  uri : RequestTarget
-  version : LeanIn.Http.H1.Version
-
-def Request.line (r : Request) : RequestLine :=
-  { method := r.method, uri := r.uri, version := r.head.version }
+abbrev RequestLine := Std.Http.Request.Head
 
 /-- A buffered response returned by a route handler. The router writes it through the connection's
 `ResponseWriter`; a handler that streams will need the writer form, which this cut does not expose. -/
@@ -142,26 +138,41 @@ def html (r : Response) (s : String) : Response :=
 
 end Response
 
-/-- The application handler: a request in, a buffered response out, both in the LeanIn VM. -/
-abbrev Result := Request → LeanIn.Runtime.VM Response
+/-- The application handler: a request body type, a computation monad, and a buffered `Response`. -/
+abbrev ResultM (m : Type → Type) (ReqBody : Type) := RequestM ReqBody → m Response
 
-/-- A handler with no captures left — the shape routes and middleware compose. `onContinue` is
-kept for source compatibility with the Std-shaped router; the native driver does not issue a
-100-continue negotiation. -/
-structure StatelessHandler where
-  onRequest : Result
-  onContinue : LeanIn.Http.H1.Head → Bool := fun _ => true
+/-- The native result: LeanIn's reader and `VM`. -/
+abbrev Result := ResultM LeanIn.Runtime.VM LeanIn.Http.Server.BodyReader
 
-instance : CoeFun StatelessHandler (fun _ => Result) := ⟨StatelessHandler.onRequest⟩
+/-- A handler with no captures left, parameterized over its computation and request body. `onContinue`
+takes the same `Std.Http` head the rest of the surface uses. -/
+structure StatelessHandlerM (m : Type → Type) [Monad m] (ReqBody : Type) where
+  onRequest : ResultM m ReqBody
+  onContinue : Std.Http.Request.Head → Bool := fun _ => true
+
+/-- The native stateless handler. -/
+abbrev StatelessHandler := StatelessHandlerM LeanIn.Runtime.VM LeanIn.Http.Server.BodyReader
+
+instance {m : Type → Type} [Monad m] {ReqBody : Type} :
+    CoeFun (StatelessHandlerM m ReqBody) (fun _ => ResultM m ReqBody) :=
+  ⟨StatelessHandlerM.onRequest⟩
 
 namespace Handler
-def ofFn (f : Request → Response) : StatelessHandler :=
+/-- Lift a pure handler into any monad and body type. -/
+def ofFnM {m : Type → Type} [Monad m] {ReqBody : Type}
+    (f : RequestM ReqBody → Response) : StatelessHandlerM m ReqBody :=
   { onRequest := fun request => pure (f request) }
+
+/-- The native `ofFn`. -/
+def ofFn (f : Request → Response) : StatelessHandler :=
+  ofFnM (m := LeanIn.Runtime.VM) f
 end Handler
 
 /-- Default `404 Not Found` response used by `toHandler` when no route matches. -/
-def defaultNotFound : Result :=
+def defaultNotFoundM {m : Type → Type} [Monad m] {ReqBody : Type} : ResultM m ReqBody :=
   fun _request => pure (Response.notFound.text "Not Found")
+
+def defaultNotFound : Result := defaultNotFoundM
 
 /-- Reads back the `MatchedRoute` `toHandler` published, from a request's or a response's
 `extensions`. `none` means no route matched; absence is the signal. -/
@@ -195,62 +206,80 @@ def decodedPath (target : RequestTarget) : List String :=
 
 /-- Dispatch and apply the matched handler; `none` if no route matched and no slash redirect applies.
 The index is built once, by `toHandler` or `runRequest`'s caller. -/
-def respond? (routes : RouteIndex Result) (request : Request) : Option Result :=
-  let path := decodedPath request.uri
-  match routes.matchTable request.method path with
+def respond?M {m : Type → Type} [Monad m] {ReqBody : Type}
+    (routes : RouteIndex (ResultM m ReqBody)) (request : RequestM ReqBody) :
+    Option (ResultM m ReqBody) :=
+  let path := decodedPath request.line.uri
+  match routes.matchTable request.line.method path with
   | some (matched, handler) => some fun request => do
       let response ← handler { request with extensions := request.extensions.insert matched }
       return { response with extensions := response.extensions.insert matched }
   | none =>
-      (slashRedirect? routes request.method request.uri path).map fun location =>
+      (slashRedirect? routes request.line.method request.line.uri path).map fun location =>
         fun _ => pure (((Response.withStatus .permanentRedirect).header .location location).text "")
 
 /-- Run a request through an existing index. -/
-def runRequestAt (routes : RouteIndex Result) (request : Request)
-    (notFound : Result := defaultNotFound) : LeanIn.Runtime.VM Response :=
-  match respond? routes request with
+def runRequestAtM {m : Type → Type} [Monad m] {ReqBody : Type}
+    (routes : RouteIndex (ResultM m ReqBody)) (request : RequestM ReqBody)
+    (notFound : ResultM m ReqBody := defaultNotFoundM) : m Response :=
+  match respond?M routes request with
   | some response => response request
   | none => notFound request
 
 /-- Run a list of routes through a freshly built index. -/
+def runRequestM {m : Type → Type} [Monad m] {ReqBody : Type}
+    (routes : List (Route (ResultM m ReqBody))) (request : RequestM ReqBody)
+    (notFound : ResultM m ReqBody := defaultNotFoundM) : m Response :=
+  runRequestAtM (RouteIndex.of routes) request notFound
+
+/-- Adapt a router to a stateless handler, preserving the upstream meaning of `toHandler`:
+dispatch, run the matched handler, and return the response. The index is built once here. -/
+def toHandlerM {m : Type → Type} [Monad m] {ReqBody : Type}
+    (routes : List (Route (ResultM m ReqBody))) (notFound : ResultM m ReqBody := defaultNotFoundM) :
+    StatelessHandlerM m ReqBody :=
+  let index := RouteIndex.of routes
+  { onRequest := fun request => runRequestAtM index request notFound }
+
+/-- The native `respond?`. -/
+def respond? (routes : RouteIndex Result) (request : Request) : Option Result :=
+  respond?M routes request
+
+/-- The native `runRequestAt`. -/
+def runRequestAt (routes : RouteIndex Result) (request : Request)
+    (notFound : Result := defaultNotFound) : LeanIn.Runtime.VM Response :=
+  runRequestAtM routes request notFound
+
+/-- The native `runRequest`. -/
 def runRequest (routes : List (Route Result)) (request : Request)
     (notFound : Result := defaultNotFound) : LeanIn.Runtime.VM Response :=
-  runRequestAt (RouteIndex.of routes) request notFound
+  runRequestM routes request notFound
 
-/-- Adapt a router to a `StatelessHandler`, preserving the upstream meaning of `toHandler`:
-dispatch, run the matched handler, and return the response. The index is built once here. -/
+/-- The native `toHandler`. -/
 def toHandler (routes : List (Route Result)) (notFound : Result := defaultNotFound) :
     StatelessHandler :=
-  let index := RouteIndex.of routes
-  { onRequest := fun request => runRequestAt index request notFound }
+  toHandlerM routes notFound
 
 /-- Adapt a `StatelessHandler` to LeanIn's streaming connection handler. The body is available to
 handlers through `Request.body`; the response is buffered because `Result` carries a `Response`
 value. When the driver has `autoContinue` off, `onContinue` decides the interim response. -/
 def toStreamHandlerOf (handler : StatelessHandler) : LeanIn.Http.Server.StreamHandler :=
   fun head body writer => do
-    match RequestTarget.parse? head.targetString with
-    | none =>
+    match LeanIn.Http.StdHandler.headToStock head with
+    | .error _ =>
       writer.start { status := 400, reason := "Bad Request" }
       writer.write "Bad Request".toUTF8
       writer.finish
-    | some uri =>
-      match Method.ofString? head.methodTokenString with
-      | none =>
-        writer.start { status := 501, reason := "Not Implemented" }
-        writer.write "Not Implemented".toUTF8
-        writer.finish
-      | some method =>
-        let request : Request := { head, uri, method, body }
-        if LeanIn.Http.H1.expectsContinue head && handler.onContinue head then
-          writer.sendContinue
-        let response ← handler.onRequest request
-        let headers := if response.headers.any (fun (n, _) => n.toLower == "content-length") then
-            response.headers
-          else response.headers.push ("content-length", toString response.body.size)
-        writer.start { status := response.status, reason := response.reason, headers }
-        writer.write response.body
-        writer.finish
+    | .ok line =>
+      let request : Request := { line, body }
+      if LeanIn.Http.H1.expectsContinue head && handler.onContinue line then
+        writer.sendContinue
+      let response ← handler.onRequest request
+      let headers := if response.headers.any (fun (n, _) => n.toLower == "content-length") then
+          response.headers
+        else response.headers.push ("content-length", toString response.body.size)
+      writer.start { status := response.status, reason := response.reason, headers }
+      writer.write response.body
+      writer.finish
 
 /-- Adapt a route table to LeanIn's connection handler. -/
 def toStreamHandler (routes : List (Route Result)) (notFound : Result := defaultNotFound) :

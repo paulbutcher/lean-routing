@@ -9,7 +9,7 @@ path = ".."
 [[require]]
 name = "leanin"
 git = "https://github.com/scidonia/leanin.git"
-rev = "v0.6.0"
+rev = "028ca6a04a0894fbbcad3aa519ca790393da1bad"
 
 [[require]]
 name = "plausible"
