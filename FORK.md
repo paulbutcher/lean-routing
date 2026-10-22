@@ -18,6 +18,9 @@ remain). The fork keeps the typed patterns, links, matching and route-table code
 - `toHandlerM`, `runRequestM` and `respond?M` are the generic dispatch path; the native names are
   aliases. `Routing.Stock.toStatelessHandler` instantiates the same route source at
   `ContextAsync`/`Body.Stream` and converts the buffered response to `Std.Http.Response Body.Any`.
+- `Routing.Body` adds host-neutral request reading and `bytes`/`stream` response bodies;
+  `Routing.BodyHandlerM` and `BodyResultM` carry a body-valued result, with native streaming and
+  stock buffering adapters.
 - `Std.Http` remains the metadata surface: `Method`, `Status`, `Header`, `Extensions`,
   `RequestTarget` and now `Request.Head`.
 - The streaming extension (`Routing.Streaming`) remains native and uses the same converted line.
