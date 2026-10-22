@@ -22,10 +22,10 @@ def native : LeanIn.Http.Server.StreamHandler := toStreamHandlerBodyOf textHandl
 def stock : Std.Http.Server.StatelessHandler := toStockHandlerBodyOf stockTextHandler
 
 def nativeFile : BodyHandlerM LeanIn.Runtime.VM LeanIn.Http.Server.BodyReader :=
-  staticFile "/dev/null"
+  staticFileDeferred "/dev/null"
 
 def stockFile : BodyHandlerM ContextAsync Std.Http.Body.Stream :=
-  staticFile "/dev/null"
+  staticFileDeferred "/dev/null"
 
 #eval show IO Unit from do
   let response : ResponseM LeanIn.Runtime.VM := ResponseM.text "hello"
@@ -39,5 +39,12 @@ def stockFile : BodyHandlerM ContextAsync Std.Http.Body.Stream :=
     let got := chunk.map (·.data) |>.getD .empty
     unless got == "hello".toUTF8 do
       throw (IO.userError "stock body")
+    let streamed : ResponseM ContextAsync :=
+      ResponseM.stream none (fun send => send "hello".toUTF8)
+    let stock ← ResponseM.toStock streamed
+    let chunk ← Std.Http.Body.recv stock.body
+    let got := chunk.map (·.data) |>.getD .empty
+    unless got == "hello".toUTF8 do
+      throw (IO.userError "stock streamed body")
 
 end RoutingTests.BodyHandler

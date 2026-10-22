@@ -48,13 +48,32 @@ def withSession {m : Type → Type} [Monad m] [MonadLift IO m] {ReqBody : Type}
       let response ← next.onRequest request
       pure { response with headers := response.headers.push ("set-cookie", s!"session={id}") } }
 
-/-- A buffered static-file handler; the body capability can later stream it. -/
+/-- A buffered static-file handler. -/
 def staticFile {m : Type → Type} [Monad m] [MonadLift IO m] {ReqBody : Type}
     (path : System.FilePath) (contentType : String := "application/octet-stream") :
     BodyHandlerM m ReqBody :=
   { onRequest := fun _ => do
       let data ← monadLift (IO.FS.readBinFile path : IO ByteArray)
       pure ((ResponseM.bytes data).header "content-type" contentType) }
+
+private partial def sendChunks {m : Type → Type} [Monad m] (data : ByteArray) (size : Nat)
+    (send : ByteArray → m Unit) (i : Nat) : m Unit := do
+  if i < data.size then
+    send (data.extract i (min (i + size) data.size))
+    sendChunks data size send (i + size)
+  else
+    pure ()
+
+/-- A deferred static-file handler: the file is read only when the response producer runs, after the
+handler has returned. The read is still whole-file; a later cut can replace it with a handle-backed
+producer once the handle lifetime is explicit. -/
+def staticFileDeferred {m : Type → Type} [Monad m] [MonadLift IO m] {ReqBody : Type}
+    (path : System.FilePath) (contentType : String := "application/octet-stream") :
+    BodyHandlerM m ReqBody :=
+  { onRequest := fun _ =>
+      pure ((ResponseM.stream none fun send => do
+        let data ← monadLift (IO.FS.readBinFile path : IO ByteArray)
+        sendChunks data 65536 send 0).header "content-type" contentType) }
 
 end Routing
 end
