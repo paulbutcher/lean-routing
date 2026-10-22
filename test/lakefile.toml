@@ -7,6 +7,11 @@ name = "routing"
 path = ".."
 
 [[require]]
+name = "leanin"
+git = "https://github.com/scidonia/leanin.git"
+rev = "v0.6.0"
+
+[[require]]
 name = "plausible"
 git = "https://github.com/leanprover-community/plausible"
 rev = "v4.34.0"

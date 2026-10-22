@@ -1,6 +1,10 @@
+> **LeanIn fork.** This branch replaces the `Std.Http.Server` serving layer with LeanIn. The router,
+> patterns, links and route tables are unchanged; handlers run in `LeanIn.Runtime.VM`, and the router
+> is served through `LeanIn.Http.Server`. See [`FORK.md`](FORK.md).
+
 # Routing
 
-A typed HTTP router for Lean 4 / [`Std.Http`](https://leanprover-community.github.io/mathlib4_docs/Std/Http.html). Route patterns like `"/users/:id:Nat"` determine the exact type your handler must have; a wrong-arity or wrong-type handler is a compile error, not a runtime bug.
+A typed HTTP router for Lean 4, served on LeanIn. `Std.Http` remains only for method/status/header/request-target data. Route patterns like `"/users/:id:Nat"` determine the exact type your handler must have; a wrong-arity or wrong-type handler is a compile error, not a runtime bug.
 
 See: [Formally verified CRUD](https://paulbutcher.com/lean2.html).
 
@@ -32,17 +36,17 @@ This is a macro which parses the route specifications and generates `AppName.pat
 ### 2. Combine route handlers into an application
 
 ```lean
-import Std.Http.Server
-import Routing
+import Routing.Server
+import LeanIn.Http.Server
 
-open Std Http Server
 open Routing
 open AppName
 
 def app : StatelessHandler := [
-    .get patterns.index (fun request => Response.ok.text "home"),
-    .get patterns.user (fun (id : Nat) request => Response.ok.text s!"user #{id}"),
-    .post patterns.userPost (fun (id : Nat) (slug : String) request => Response.ok.text s!"user #{id}, post {slug}")
+    .get patterns.index (fun _ => pure (Response.ok.text "home")),
+    .get patterns.user (fun (id : Nat) _ => pure (Response.ok.text s!"user #{id}")),
+    .post patterns.userPost (fun (id : Nat) (slug : String) _ =>
+      pure (Response.ok.text s!"user #{id}, post {slug}"))
   ] |> toHandler
 ```
 
@@ -51,8 +55,20 @@ Unmatched requests get a default `404 Not Found`; pass `notFound := ...` to `toH
 ### 3. Wire into a server
 
 ```lean
+import LeanIn.Http.Server
+
+def routes : List (Route Result) := [ ... ]  -- the routes above
+
 def main : IO Unit := do
-  ... Std.Http.Server.run app ...
+  let hooks ← LeanIn.Runtime.Hooks.new
+  let listener ← LeanIn.Runtime.Listener.bind (LeanIn.Runtime.loopback 8080)
+  let executor ← LeanIn.Sched.Executor.new LeanIn.Task.Item 256 1
+  let cfg : LeanIn.Http.Server.Config :=
+    { h1 := { autoContinue := false }, clock := LeanIn.Runtime.Clock.live hooks }
+  let handler := Routing.toStreamHandler routes
+  let _ ← LeanIn.Runtime.run executor
+    (LeanIn.Runtime.serveForever hooks listener
+      (LeanIn.Http.Server.serveConnStream cfg · handler))
 ```
 
 ### Generating links
@@ -95,11 +111,11 @@ A mounted index renders with a trailing slash, as the unmounted index `/` has, s
 
 ```lean
 def blogRoutes : List (Route Result) :=
-  [ .get Blog.patterns.index (fun request => Response.ok.text "blog home"),
-    .get Blog.patterns.post (fun (slug : String) request => Response.ok.text s!"post {slug}") ]
+  [ .get Blog.patterns.index (fun _ => pure (Response.ok.text "blog home")),
+    .get Blog.patterns.post (fun (slug : String) _ => pure (Response.ok.text s!"post {slug}")) ]
 
 def app : StatelessHandler :=
-  ( [ .get AppName.patterns.index (fun request => Response.ok.text "home") ] ++
+  ( [ .get AppName.patterns.index (fun _ => pure (Response.ok.text "home")) ] ++
     mount_routes "/blog" blogRoutes
   ) |> toHandler
 ```
@@ -114,13 +130,13 @@ A `Router` groups routes behind its own middleware, so different parts of an app
 def api : Router :=
   { middlewares := [requireToken],
     routes := [ .mount AppName.patterns.blog
-      [ .get Blog.patterns.index (fun request => Response.ok.text "blog home"),
-        .get Blog.patterns.post (fun (slug : String) request => Response.ok.text s!"post {slug}") ] ],
+      [ .get Blog.patterns.index (fun _ => pure (Response.ok.text "blog home")),
+        .get Blog.patterns.post (fun (slug : String) _ => pure (Response.ok.text s!"post {slug}")) ] ],
     fallback := some blogNotFound }
 
 def site : Router :=
   { middlewares := [logging],
-    routes := [ .get AppName.patterns.index (fun request => Response.ok.text "home") ],
+    routes := [ .get AppName.patterns.index (fun _ => pure (Response.ok.text "home")) ],
     routers := [api] }
 
 def app : StatelessHandler := site.toHandler
@@ -137,7 +153,7 @@ A router serves a request with its first route that matches, else its first sub-
 The matched route is stored in the `extensions` of both the request and the response. Read it back with `Routing.matchedRoute?`:
 
 ```lean
-def handler (request : Request Body.Stream) : ContextAsync (Response Body.Any) := do
+def handler (request : Routing.Request) : LeanIn.Runtime.VM Routing.Response := do
   let response ← inner request
   match Routing.matchedRoute? response.extensions with
   | some matched => ...   -- matched.segs = [.lit "users", .capture "id" .nat]
@@ -182,8 +198,8 @@ There is no external suite for a router, so these check behaviour against the sp
 
 - [test/RoutingTests/Handler.lean](test/RoutingTests/Handler.lean): links are parsed and percent-decoded by `Std.Http`'s own request-target parser, as `toHandler` does, and must dispatch back to the values they were built from, including literals holding `#`, `?` and `%`; an empty, `.` or `..` `String` capture never matches.
 - [test/RoutingTests/RelativeLink.lean](test/RoutingTests/RelativeLink.lean): the RFC 3986 edge cases, that a same-page link is not the empty same-document reference, that a first segment holding `:` is not read as a scheme nor an empty one as an absolute path, and that an upward `"."` link resolves to a trailing-slash path `dispatch` still serves.
-- [test/RoutingTests/Server.lean](test/RoutingTests/Server.lean): the real `toHandler` against a real `Std.Http` request, checking that the matched route reaches both the request's and the response's `extensions`, that a 404 carries none, and that a mounted index requested without its slash gets a `308` with the query intact.
-- [test/RoutingTests/Router.lean](test/RoutingTests/Router.lean): a `Router` tree against real requests, checking middleware order, which router serves a hit and which answers a miss under a mount, the full pattern reported on both request and response, and that `Expect: 100-continue` is decided by the router that would serve the request.
+- [test/RoutingTests/Server.lean](test/RoutingTests/Server.lean): the real `toHandler` against a native `H1.Head` request, checking that the matched route reaches both the request's and the response's `extensions`, that a 404 carries none, and that a mounted index requested without its slash gets a `308` with the query intact.
+- [test/RoutingTests/Router.lean](test/RoutingTests/Router.lean): a `Router` tree against native requests, checking middleware order, which router serves a hit and which answers a miss under a mount, the full pattern reported on both request and response, and sub-router `onContinue` selection.
 
 ## Property-based testing
 

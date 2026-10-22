@@ -12,4 +12,6 @@ import RoutingTests.Mount
 import RoutingTests.RelativeLink
 import RoutingTests.CrossModule
 import RoutingTests.Router
+import RoutingTests.Extras
+import RoutingTests.Compat
 import RoutingTests.Trie
