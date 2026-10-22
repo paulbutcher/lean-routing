@@ -1,3 +1,4 @@
+import Routing.Pilot
 import Routing.Stock
 
 /-!
@@ -29,10 +30,11 @@ def withContractHeader {m : Type → Type} [Monad m] {ReqBody : Type}
       let response ← h.onRequest request
       return { response with headers := response.headers.push ("x-contract", "yes") } }
 
-def nativeHandler : StatelessHandler := withContractHeader (toHandler nativeRoutes)
+def nativeHandler : StatelessHandler :=
+  withRouteHeader (withContractHeader (toHandler nativeRoutes))
 
 def stockHandler : Std.Http.Server.StatelessHandler :=
-  Stock.toStatelessHandlerOf (withContractHeader (toHandlerM stockRoutes))
+  Stock.toStatelessHandlerOf (withRouteHeader (withContractHeader (toHandlerM stockRoutes)))
 
 private def emptyBody : LeanIn.Http.Server.BodyReader :=
   { recv := fun _ => pure none, drained := pure true, leftover := pure .empty }
@@ -52,6 +54,7 @@ private def runVM (m : LeanIn.Runtime.VM α) : IO α := do
   let line : Std.Http.Request.Head := { method := .get, version := .v11, uri }
   let native ← runVM (nativeHandler.onRequest { line, body := emptyBody })
   unless native.status == 200 && native.headers.any (·.1 == "x-contract") &&
+      native.headers.any (fun (n, v) => n == "x-route" && v == "/hello") &&
       native.body == "hello".toUTF8 do
     throw (IO.userError s!"native status/header/body {native.status} {native.headers}")
   Async.block <| ContextAsync.run do
@@ -59,8 +62,10 @@ private def runVM (m : LeanIn.Runtime.VM α) : IO α := do
     let response ← stockHandler.onRequest { line, body }
     let chunk ← Std.Http.Body.recv response.body
     let bytes := chunk.map (·.data) |>.getD .empty
+    let route := response.line.headers.get? (Header.Name.ofString! "x-route")
     unless response.line.status == .ok &&
         response.line.headers.contains (Header.Name.ofString! "x-contract") &&
+        route.map (·.value) == some "/hello" &&
         bytes == "hello".toUTF8 do
       throw (IO.userError s!"stock status/header/body {response.line.status} {bytes}")
 
