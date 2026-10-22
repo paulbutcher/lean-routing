@@ -18,9 +18,16 @@ open Std.Http Server
 /-- A route result on the stock server. -/
 abbrev Result := ResultM ContextAsync Body.Stream
 
-/-- The stock response status for a numeric routing status, using the named status where one exists. -/
-def statusOfNat (n : Nat) : Status :=
-  (Status.ofCode none n.toUInt16).getD .ok
+/-- The stock response status for a numeric routing status. Named codes stay named; an unknown code
+uses `Status.other`, and an invalid custom status falls back to `500` rather than silently becoming `200`. -/
+def statusOfNat (n : Nat) (reason : String) : Status :=
+  let code := n.toUInt16
+  match Status.ofCode none code with
+  | some status => status
+  | none =>
+    match CustomStatus.ofCodeAndPhrase? code reason with
+    | some custom => .other custom
+    | none => .internalServerError
 
 def headersOf (headers : Array (String × String)) : Std.Http.Headers :=
   headers.foldl (fun acc (name, value) =>
@@ -32,7 +39,7 @@ def headersOf (headers : Array (String × String)) : Std.Http.Headers :=
 def responseOf (response : Response) : ContextAsync (Std.Http.Response Body.Any) := do
   let body ← (Std.Http.Body.Full.ofByteArray response.body : Async Body.Full)
   let line : Std.Http.Response.Head :=
-    { status := statusOfNat response.status
+    { status := statusOfNat response.status response.reason
       version := .v11
       headers := headersOf response.headers }
   return { line, body := Std.Http.Body.Any.ofBody body, extensions := response.extensions }
