@@ -145,18 +145,17 @@ private def runVM (m : LeanIn.Runtime.VM α) : IO α := do
   | none => throw (IO.userError "test VM suspended; this test expects a pure response")
 
 private def requestFor (methodName target : String) : IO Request := do
-  let some method := Method.ofString? methodName
-    | throw (IO.userError s!"unknown method {methodName}")
-  let some uri := Std.Http.RequestTarget.parse? target
-    | throw (IO.userError s!"test target {target.quote} is not a valid request target")
   let raw := s!"{methodName} {target} HTTP/1.1\r\nHost: x\r\n\r\n".toUTF8
   let head ← match H1.parseHead raw 0 {} with
     | .ok head _ => pure head
     | .failed _ => throw (IO.userError s!"could not parse {target.quote}")
     | .incomplete => throw (IO.userError s!"incomplete request {target.quote}")
+  let line ← match LeanIn.Http.StdHandler.headToStock head with
+    | .ok line => pure line
+    | .error e => throw e
   let body : LeanIn.Http.Server.BodyReader :=
     { recv := fun _ => pure none, drained := pure true, leftover := pure .empty }
-  return { head, uri, method, body }
+  return { line, body }
 
 private def run (target : String) : IO Outcome := do
   let request ← requestFor "GET" target
@@ -170,7 +169,7 @@ private def run (target : String) : IO Outcome := do
 
 private def continues (target : String) : IO Bool := do
   let request ← requestFor "POST" target
-  return siteHandler.onContinue request.head
+  return siteHandler.onContinue request.line
 
 private def check (label : String) (ok : Bool) : IO Unit :=
   unless ok do throw (IO.userError label)

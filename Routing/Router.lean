@@ -65,7 +65,7 @@ structure Router where
 
 private structure Compiled where
   takes : Method → List String → Bool
-  onContinue : LeanIn.Http.H1.Head → Bool
+  onContinue : Std.Http.Request.Head → Bool
   handler : StatelessHandler
 
 mutual
@@ -87,15 +87,10 @@ private def Router.compile : Router → Compiled
       { onRequest := fun request =>
           match respond? index request with
           | some response => response request
-          | none => (next request.method (decodedPath request.uri)) request
+          | none => (next request.line.method (decodedPath request.line.uri)) request
         onContinue := fun head =>
-          let path := match Std.Http.RequestTarget.parse? head.targetString with
-            | some target => decodedPath target
-            | none => []
-          match Std.Http.Method.ofString? head.methodTokenString with
-          | none => false
-          | some method =>
-            if own method path then true else (next method path).onContinue head }
+          let path := decodedPath head.uri
+          if own head.method path then true else (next head.method path).onContinue head }
     { takes := fun method path =>
         own method path || roots.any (·.isPrefixOf path) || subs.any (·.takes method path)
       onContinue := fun head => inner.onContinue head

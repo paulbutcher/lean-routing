@@ -22,11 +22,11 @@ def notFound : Result := fun _ w => do
 
 def respond? (routes : RouteIndex Result) (request : Request)
     (w : LeanIn.Http.Server.ResponseWriter) : Option (LeanIn.Runtime.VM Unit) :=
-  match routes.matchTable request.method (decodedPath request.uri) with
+  match routes.matchTable request.line.method (decodedPath request.line.uri) with
   | some (matched, handler) =>
     some (handler { request with extensions := request.extensions.insert matched } w)
   | none =>
-    (slashRedirect? routes request.method request.uri (decodedPath request.uri)).map fun location => do
+    (slashRedirect? routes request.line.method request.line.uri (decodedPath request.line.uri)).map fun location => do
       w.start { status := 308, reason := "Permanent Redirect", headers := #[("location", toString location)] }
       w.finish
 
@@ -34,19 +34,14 @@ def toStreamHandler (routes : List (Route Result)) (missing : Result := notFound
     LeanIn.Http.Server.StreamHandler :=
   let index := RouteIndex.of routes
   fun head body writer => do
-    match Std.Http.RequestTarget.parse? head.targetString with
-    | none =>
+    match LeanIn.Http.StdHandler.headToStock head with
+    | .error _ =>
       writer.start { status := 400, reason := "Bad Request" }
       writer.finish
-    | some uri =>
-      match Method.ofString? head.methodTokenString with
-      | none =>
-        writer.start { status := 501, reason := "Not Implemented" }
-        writer.finish
-      | some method =>
-        let request : Request := { head, uri, method, body }
-        match respond? index request writer with
-        | some action => action
-        | none => missing request writer
+    | .ok line =>
+      let request : Request := { line, body }
+      match respond? index request writer with
+      | some action => action
+      | none => missing request writer
 
 end Routing.Streaming

@@ -11,6 +11,7 @@ import RoutingTests.Server
 import RoutingTests.Mount
 import RoutingTests.RelativeLink
 import RoutingTests.CrossModule
+import RoutingTests.Generic
 import RoutingTests.Router
 import RoutingTests.Extras
 import RoutingTests.Compat
