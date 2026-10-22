@@ -14,15 +14,16 @@ private def routeFor (_ : Nat) : Route Result :=
 private def routes : List (Route Result) := (List.range 64).map routeFor
 
 private def requestFor (target : String) : IO Request := do
-  let some method := Method.ofString? "GET" | throw (IO.userError "bad method")
-  let some uri := RequestTarget.parse? target | throw (IO.userError "bad target")
   let raw := s!"GET {target} HTTP/1.1\r\nHost: x\r\n\r\n".toUTF8
   let head ← match LeanIn.Http.H1.parseHead raw 0 {} with
     | .ok h _ => pure h
     | _ => throw (IO.userError "bad head")
+  let line ← match LeanIn.Http.StdHandler.headToStock head with
+    | .ok line => pure line
+    | .error e => throw e
   let body : LeanIn.Http.Server.BodyReader :=
     { recv := fun _ => pure none, drained := pure true, leftover := pure .empty }
-  return { head, uri, method, body }
+  return { line, body }
 
 private def nsPer (n : Nat) (act : IO Unit) : IO Nat := do
   let t0 ← IO.monoNanosNow
