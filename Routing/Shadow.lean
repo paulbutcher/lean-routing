@@ -8,9 +8,11 @@ public import Routing.Route
 public meta import Lean.Elab.Tactic
 
 /-!
-A route is *shadowed* when an earlier one with the same method matches every path it does, so it
-can never be dispatched. `RouteIndex.of` (`Trie.lean`) takes a proof that no route in its table is,
-and `routes_unshadowed` supplies it for a table known at compile time.
+A route is *shadowed* when something tried before it takes every request it would match, so it can
+never be dispatched: an earlier route with the same method, or in a `Router`, an earlier router's
+slash redirect or mount root (`Internal.Taker`). `RouteIndex.of` (`Trie.lean`) and
+`Router.toHandler` take a proof that no route is, and `routes_unshadowed` supplies it for a table
+known at compile time.
 -/
 
 public section
@@ -19,12 +21,17 @@ namespace Routing
 
 open Std.Http (Method)
 
-/-- What decides whether a route is reachable. Leaving out the handler lets `routes_unshadowed`
-check a table whose handlers close over a value known only at run time. -/
-@[expose] def Route.key (r : Route result) : Method × List PathSeg :=
-  (r.method, r.segs)
-
 namespace Internal
+
+/-- Something that takes a request before the routes after it, in the order a `Router` tries
+them. -/
+inductive Taker where
+  /-- A route, the one kind whose own reachability is checked. -/
+  | route (method : Method) (segs : List PathSeg)
+  /-- A router's redirect of a request matching `segs` to the same path with a slash added. -/
+  | redirect (method : Method) (segs : List PathSeg)
+  /-- A router's mount root, which takes every request under it, whatever its method. -/
+  | root (segs : List String)
 
 /-- Whether `a` matches every segment `b` matches. A `Nat` capture matches no `unlinkable`
 segment, so a `String` capture covers it. -/
@@ -43,34 +50,75 @@ neither can cover a pattern of another length. -/
   | a :: as, b :: bs => segCovers a b && covers as bs
   | _, _ => false
 
-/-- Whether no route in `keys` is shadowed by an earlier one. -/
-@[expose] def unshadowed : List (Method × List PathSeg) → Bool
-  | [] => true
-  | (m, segs) :: rest =>
-    rest.all (fun (m', segs') => !(m == m' && covers segs segs')) && unshadowed rest
+/-- Whether every path `b` matches starts with `pre`. -/
+@[expose] def coversPrefix : List String → List PathSeg → Bool
+  | [], _ => true
+  | s :: pre, .lit t _ :: b => s == t && coversPrefix pre b
+  | _, _ => false
 
-theorem unshadowed_append (l₁ l₂ : List (Method × List PathSeg))
+/-- Whether `t` takes every request a route `method segs` would match. -/
+@[expose] def Taker.blocks : Taker → Method → List PathSeg → Bool
+  | .route m a, method, segs | .redirect m a, method, segs => m == method && covers a segs
+  | .root pre, _, segs => coversPrefix pre segs
+
+/-- Whether `u` is a route that `t`, coming before it, leaves unreachable. -/
+@[expose] def Taker.shadows (t : Taker) : Taker → Bool
+  | .route method segs => t.blocks method segs
+  | _ => false
+
+/-- Whether no route in `takers` is shadowed by an earlier taker. -/
+@[expose] def unshadowed : List Taker → Bool
+  | [] => true
+  | t :: rest => rest.all (!t.shadows ·) && unshadowed rest
+
+theorem unshadowed_append (l₁ l₂ : List Taker)
     (h : unshadowed (l₁ ++ l₂) = true) : unshadowed l₁ = true ∧ unshadowed l₂ = true := by
   induction l₁ with
   | nil => simpa [unshadowed] using h
-  | cons k t ih =>
-    obtain ⟨m, segs⟩ := k
+  | cons t rest ih =>
     simp only [List.cons_append, unshadowed, List.all_append, Bool.and_eq_true] at h ⊢
     exact ⟨⟨h.1.1, (ih h.2).1⟩, (ih h.2).2⟩
 
-/-- A line for each shadowed route in `keys`, naming the route that shadows it. -/
-def shadowReport : List (Method × List PathSeg) → List String
+@[expose] def isEmptyLit : PathSeg → Bool
+  | .lit s _ => s.isEmpty
+  | .capture .. => false
+
+/-- `some a` when `segs` is `a` followed by an empty literal, so a request matching `a` without its
+trailing slash is redirected. `a` itself must not end with one, or the redirect would not take
+every request `a` matches. -/
+@[expose] def redirectFrom? (segs : List PathSeg) : Option (List PathSeg) :=
+  match segs.getLast? with
+  | some last =>
+    let a := segs.dropLast
+    if isEmptyLit last && !(a.getLast?.any isEmptyLit) then some a else none
+  | none => none
+
+def Taker.describe : Taker → String
+  | .route m segs => s!"{m} {renderPattern segs}"
+  | .redirect m segs =>
+    s!"the redirect from {m} {renderPattern segs} to {renderPattern (segs ++ [.lit ""])}"
+  | .root segs => s!"the router mounted at /{String.intercalate "/" segs}"
+
+/-- A line for each shadowed route in `takers`, naming each taker that shadows it. -/
+def shadowReport : List Taker → List String
   | [] => []
-  | (m, segs) :: rest =>
-    (rest.filter fun (m', segs') => m == m' && covers segs segs').map (fun (_, segs') =>
-      s!"{m} {renderPattern segs'} is unreachable behind {m} {renderPattern segs}") ++
+  | t :: rest =>
+    ((rest.filter t.shadows).map fun u => s!"{u.describe} is unreachable behind {t.describe}") ++
       shadowReport rest
 
 end Internal
 
+@[expose] def Route.key (r : Route result) : Internal.Taker :=
+  .route r.method r.segs
+
+/-- The redirect `r` causes, if any (`Internal.redirectFrom?`). -/
+@[expose] def Route.redirect? (r : Route result) : Option Internal.Taker :=
+  (Internal.redirectFrom? r.segs).map (.redirect r.method)
+
 /-- Closes `Internal.unshadowed keys = true` by evaluating it, reporting each shadowed route if it
 is false. A handler may mention a local value, but a method or pattern may not, since then the table
-is only known at run time; see `RouteIndex.ofChecked`. -/
+is only known at run time; see `RouteIndex.ofChecked`. Dropping a handler means reducing the table,
+so one defined in another module must be `@[expose]`d. -/
 syntax (name := routesUnshadowed) "routes_unshadowed" : tactic
 
 open Lean Elab Tactic Meta
@@ -91,6 +139,13 @@ private meta opaque shadowReportOf (keys : Expr) : MetaM (List String)
   -- Reducing drops the handlers, which are all a local value can usually reach.
   let keys ← if keys.hasFVar then reduce keys else pure keys
   if keys.hasFVar || keys.hasMVar then
+    -- A definition another module doesn't expose reaches this one as an axiom, with no body.
+    let env ← getEnv
+    let hidden := keys.find? fun e => e.hasFVar && e.getAppFn.constName?.any fun c =>
+      env.find? c matches some (.axiomInfo _)
+    if let some c := hidden.bind (·.getAppFn.constName?) then
+      throwError "routes_unshadowed: `{c}` is defined in another module without `@[expose]`, so \
+        its routes can't be checked here; expose it"
     throwError "routes_unshadowed: a route's method or pattern is only known at run time; \
       build the table with `RouteIndex.ofChecked`"
   match ← shadowReportOf keys with
