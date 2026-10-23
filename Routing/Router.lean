@@ -97,26 +97,31 @@ def Router.takersOf : List Router → List Internal.Taker
   | r :: rs => r.takers ++ Router.takersOf rs
 end
 
-private structure Compiled where
+/-- What a router compiles to. `served` is the route its handler answers a request for `target`
+with, middleware aside. -/
+structure Internal.Compiled where
   takes : Method → List String → Bool
+  served : Method → RequestTarget → Option MatchedRoute
   handler : StatelessHandler
 
 mutual
 /-- Everything not depending on the request is computed here, once, middleware included. -/
-private def Router.compile :
-    (r : Router) → Internal.unshadowed r.takers = true → Compiled
+def Internal.compile :
+    (r : Router) → Internal.unshadowed r.takers = true → Internal.Compiled
   | { middlewares, routes, routers, fallback }, h =>
     have h := Internal.unshadowed_append _ _ (by rwa [Router.takers] at h)
     have hs := Internal.unshadowed_append _ _ h.1
     let index := RouteIndex.of (Entry.listToRoutes routes)
       (Internal.unshadowed_append _ _ hs.1).1
     let roots := Entry.listRoots routes
-    let subs := Router.compileAll routers hs.2
+    let subs := Internal.compileAll routers hs.2
     let fallback := fallback.getD (Handler.ofFn defaultNotFound)
     let own (method : Method) (path : List String) : Bool :=
       (index.matchTable method path).isSome || wantsSlash index method path
+    let next? (method : Method) (path : List String) : Option Internal.Compiled :=
+      subs.find? (·.takes method path)
     let next (method : Method) (path : List String) : StatelessHandler :=
-      match subs.find? (·.takes method path) with
+      match next? method path with
       | some sub => sub.handler
       | none => fallback
     let inner : StatelessHandler :=
@@ -131,21 +136,28 @@ private def Router.compile :
           if own head.method path then pure true else (next head.method path).onContinue head }
     { takes := fun method path =>
         own method path || roots.any (·.isPrefixOf path) || subs.any (·.takes method path)
+      served := fun method target =>
+        let path := decodedPath target
+        match index.matchTable method path with
+        | some (matched, _) => some matched
+        | none =>
+          if (slashRedirect? index method target path).isSome then none
+          else (next? method path).bind (·.served method target)
       handler := middlewares.foldr (· ·) inner }
 
-private def Router.compileAll :
+def Internal.compileAll :
     (rs : List Router) → Internal.unshadowed (Router.takersOf rs) = true →
-      List Compiled
+      List Internal.Compiled
   | [], _ => []
   | r :: rs, h =>
     have h := Internal.unshadowed_append _ _ (by rwa [Router.takersOf] at h)
-    r.compile h.1 :: Router.compileAll rs h.2
+    Internal.compile r h.1 :: Internal.compileAll rs h.2
 end
 
 def Router.toHandler (router : Router)
     (h : Internal.unshadowed router.takers = true := by routes_unshadowed) :
     StatelessHandler :=
-  (router.compile h).handler
+  (Internal.compile router h).handler
 
 /-- `Router.toHandler` for a router known only at run time, failing as `RouteIndex.ofChecked`
 does. -/
