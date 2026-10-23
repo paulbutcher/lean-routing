@@ -48,6 +48,8 @@ def app : StatelessHandler := [
 
 Unmatched requests get a default `404 Not Found`; pass `notFound := ...` to `toHandler` to override it.
 
+A route that an earlier one with the same method always beats, such as `/users/new` after `/users/:name:String`, is a compile error naming both; `Router.toHandler` checks the order a router tries its routes in. The check runs with `native_decide`, so its proof trusts the compiler. A table whose methods or patterns are only known at run time cannot be checked while compiling: build it with `RouteIndex.ofChecked` and serve it with `RouteIndex.toHandler`, or use `Router.toHandlerChecked`, each of which returns the same report as an error.
+
 ### 3. Wire into a server
 
 ```lean
@@ -175,6 +177,7 @@ Linking to a strict descendant of the current page needs its own segment repeate
 - Template stability ([test/RoutingTests/Pattern.lean](test/RoutingTests/Pattern.lean), `renderTemplate_kind_invariant`): changing a capture's kind leaves the endpoint template that `matchedPattern?` reports unchanged, so telemetry grouped by route survives `:id:Nat` becoming `:id:String`.
 - Router mounts ([test/RoutingTests/Router.lean](test/RoutingTests/Router.lean), `Route.under_segs`): a route under a `Router` mount has exactly the pattern a `route_table` mount gives it, so it matches what the table's links point at.
 - Route trie ([test/RoutingTests/Trie.lean](test/RoutingTests/Trie.lean), `RouteIndex.matchTable_eq`, `RouteIndex.memory_of`): `RouteIndex.matchTable`, which `respond?`, `wantsSlash` and `slashRedirect?` match with, finds the route `matchTable` finds on the index's table, for every index, method and path. The trie holds at most one node per pattern segment, plus the root, and each route's index once.
+- Shadowed routes ([test/RoutingTests/Shadow.lean](test/RoutingTests/Shadow.lean), `Route.tryDispatch_of_covers`): every route the check reports is unreachable, since the route reported ahead of it matches every request it would.
 - Mount-prefix cancellation ([test/RoutingTests/RelativeLink.lean](test/RoutingTests/RelativeLink.lean), `relativeSegments_prefix`): a prefix shared by both endpoints drops out of a relative link, so a module's self-links are the same wherever it is mounted.
 - By construction: a handler's type is computed from its pattern, so a wrong-arity or wrong-type handler fails to compile, and `PathSeg.lit` and `MountPoint` take a proof that no segment is `.` or `..`. The `#guard_msgs` tests in [test/RoutingTests/](test/RoutingTests/) pin these, along with the compile-time rejection of malformed patterns, duplicate route names and captured mount prefixes.
 

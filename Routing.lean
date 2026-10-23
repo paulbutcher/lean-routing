@@ -7,6 +7,7 @@ module
 public import Routing.Pattern
 public import Routing.Handler
 public import Routing.Route
+public import Routing.Shadow
 public import Routing.Trie
 public import Routing.Server
 public import Routing.Router

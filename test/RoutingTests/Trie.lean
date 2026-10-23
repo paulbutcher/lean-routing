@@ -226,22 +226,24 @@ theorem candidates_sorted (index : RouteIndex result) (path : List String) :
     (fun _ _ _ hab hbc => by simp only [decide_eq_true_eq] at *; omega)
     (fun a b => by simp only [Bool.or_eq_true, decide_eq_true_eq]; omega) _).imp (by simp)
 
-theorem mem_candidates_of_fits (routes : List (Route result)) {k : Nat} (hk : k < routes.length)
+theorem mem_candidates_of_fits (routes : List (Route result))
+    (hu : Internal.unshadowed (routes.map Route.key) = true) {k : Nat} (hk : k < routes.length)
     {path : List String} (hf : Fits routes[k].segs path) :
-    k ∈ (RouteIndex.of routes).trie.candidates 0 path := by
-  have hr : Reaches (RouteIndex.of routes).trie 0 k routes[k].segs := by
+    k ∈ (RouteIndex.of routes hu).trie.candidates 0 path := by
+  have hr : Reaches (RouteIndex.of routes hu).trie 0 k routes[k].segs := by
     simpa [RouteIndex.of] using reaches_insertAll routes {} 0 k hk
   exact mem_candidates _ _ 0 k path hr hf
 
 /-- Trying the routes `cs` in order finds what `matchTable` finds, when `cs` is sorted and holds
 every route matching `path`. -/
-theorem findSome?_eq_matchTable (routes : List (Route result)) (cs : List Nat) (method : Method)
+theorem findSome?_eq_matchTable (routes : List (Route result))
+    (hu : Internal.unshadowed (routes.map Route.key) = true) (cs : List Nat) (method : Method)
     (path : List String) (hs : cs.Pairwise (· ≤ ·))
     (hc : ∀ k (hk : k < routes.length), (routes[k].tryMatch method path).isSome → k ∈ cs) :
-    (cs.findSome? fun i => (RouteIndex.of routes).routes[i]?.bind (·.tryMatch method path)) =
+    (cs.findSome? fun i => (RouteIndex.of routes hu).routes[i]?.bind (·.tryMatch method path)) =
       Routing.matchTable routes method path := by
   have hf :
-      (fun (k : Nat) => (RouteIndex.of routes).routes[k]?.bind (Route.tryMatch · method path)) =
+      (fun (k : Nat) => (RouteIndex.of routes hu).routes[k]?.bind (Route.tryMatch · method path)) =
         fun (k : Nat) => routes[k]?.bind (Route.tryMatch · method path) := by
     funext k
     simp [RouteIndex.of]
@@ -395,31 +397,35 @@ open Internal
 open Std.Http (Method)
 
 /-- The trie finds the route `matchTable` finds. -/
-theorem RouteIndex.matchTable_of (routes : List (Route result)) (method : Method)
+theorem RouteIndex.matchTable_of (routes : List (Route result))
+    (hu : Internal.unshadowed (routes.map Route.key) = true) (method : Method)
     (path : List String) :
-    (RouteIndex.of routes).matchTable method path = Routing.matchTable routes method path := by
-  refine findSome?_eq_matchTable routes _ method path (candidates_sorted _ path) fun k hk hm => ?_
+    (RouteIndex.of routes hu).matchTable method path =
+      Routing.matchTable routes method path := by
+  refine findSome?_eq_matchTable routes hu _ method path (candidates_sorted _ path)
+    fun k hk hm => ?_
   have hf := fits_of_dispatch _ _ _ (dispatch_of_tryMatch hm)
   simp only [RouteIndex.candidates, List.mem_mergeSort]
-  exact mem_candidates_of_fits routes hk hf
+  exact mem_candidates_of_fits routes hu hk hf
 
 /-- Every `RouteIndex` finds the route `matchTable` finds on its table, since `trie_eq` ties its trie
 to the one `RouteIndex.of` builds. -/
 theorem RouteIndex.matchTable_eq (index : RouteIndex result) (method : Method)
     (path : List String) :
     index.matchTable method path = Routing.matchTable index.routes.toList method path := by
-  obtain ⟨routes, trie, h⟩ := index
+  obtain ⟨routes, trie, h, hu⟩ := index
   subst h
-  simpa [RouteIndex.of] using RouteIndex.matchTable_of routes.toList method path
+  simpa [RouteIndex.of] using RouteIndex.matchTable_of routes.toList hu method path
 
 /-- The trie's memory grows with the patterns' segments. Its `size`, the number of nodes, is at most
 one per segment plus the root. Each node but the root has one edge into it, and each route's index
 sits in one node's list, once. -/
-theorem RouteIndex.memory_of (routes : List (Route result)) :
-    (RouteIndex.of routes).trie.size ≤ 1 + (routes.map (·.segs.length)).sum ∧
-      (RouteIndex.of routes).trie.lits.size + (RouteIndex.of routes).trie.captures.size + 1 =
-        (RouteIndex.of routes).trie.size ∧
-      (RouteIndex.of routes).trie.Indexed routes.length := by
+theorem RouteIndex.memory_of (routes : List (Route result))
+    (hu : Internal.unshadowed (routes.map Route.key) = true) :
+    (RouteIndex.of routes hu).trie.size ≤ 1 + (routes.map (·.segs.length)).sum ∧
+      (RouteIndex.of routes hu).trie.lits.size + (RouteIndex.of routes hu).trie.captures.size + 1 =
+        (RouteIndex.of routes hu).trie.size ∧
+      (RouteIndex.of routes hu).trie.Indexed routes.length := by
   refine ⟨?_, Trie.edges_insertAll routes {} 0 (by simp), ?_⟩
   · simpa [RouteIndex.of] using Trie.size_insertAll routes {} 0
   · simpa [RouteIndex.of] using

@@ -7,8 +7,9 @@ module
 public import Routing
 
 /-!
-A whole consumer of this library, built as an executable, exercising both macros: a
-`route_table` with a `mount` row, and `mount_routes` over the corresponding routes.
+A whole consumer of this library, built as an executable, exercising both macros, a
+`route_table` with a `mount` row and `mount_routes` over the corresponding routes, and the
+compile-time proof `RouteIndex.of` takes.
 `scripts/check-runtime.sh` builds it and reads the Lean package's absence off the binary,
 which is the form the claim is actually about.
 
@@ -47,7 +48,7 @@ end LeanFree
 
 def main : IO Unit := do
   let dispatch (path : List String) : String :=
-    (dispatchTable LeanFree.routes .get path).getD "no match"
+    (((RouteIndex.of LeanFree.routes).matchTable .get path).map (·.2)).getD "no match"
   IO.println (dispatch ["users", "7"])
   IO.println (dispatch ["blog", "posts", "hi"])
   IO.println (dispatch ["nope"])

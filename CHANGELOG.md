@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+- A route that an earlier one with the same method always beats is a compile error in `toHandler`, `Router.toHandler` and `RouteIndex.of`.
+- Add `RouteIndex.ofChecked`, `Router.toHandlerChecked` and `RouteIndex.toHandler`, for a table built at run time.
+
 ## [0.11.0] - 2026-10-22
 
 - Add `decodedPath`, the decoded path segments that routes match a request against.

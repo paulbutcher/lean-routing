@@ -76,19 +76,31 @@ structure Router where
   routers : List Router := []
   fallback : Option StatelessHandler := none
 
+mutual
+/-- The routes a router serves, in the order it tries them: its own, then each sub-router's. -/
+def Router.allRoutes : Router → List (Route Result)
+  | { routes, routers, .. } => Entry.listToRoutes routes ++ Router.allRoutesOf routers
+
+def Router.allRoutesOf : List Router → List (Route Result)
+  | [] => []
+  | r :: rs => r.allRoutes ++ Router.allRoutesOf rs
+end
+
 private structure Compiled where
   takes : Method → List String → Bool
   handler : StatelessHandler
 
 mutual
 /-- Everything not depending on the request is computed here, once, middleware included. -/
-private def Router.compile : Router → Compiled
-  | { middlewares, routes, routers, fallback } =>
-    let index := RouteIndex.of (Entry.listToRoutes routes)
+private def Router.compile :
+    (r : Router) → Internal.unshadowed (r.allRoutes.map Route.key) = true → Compiled
+  | { middlewares, routes, routers, fallback }, h =>
+    have h := Internal.unshadowed_append _ _ (by rwa [Router.allRoutes, List.map_append] at h)
+    let index := RouteIndex.of (Entry.listToRoutes routes) h.1
     let roots := routes.filterMap fun
       | .mount root _ => some root.segs
       | .route _ => none
-    let subs := Router.compileAll routers
+    let subs := Router.compileAll routers h.2
     let fallback := fallback.getD (Handler.ofFn defaultNotFound)
     let own (method : Method) (path : List String) : Bool :=
       (index.matchTable method path).isSome || wantsSlash index method path
@@ -110,12 +122,25 @@ private def Router.compile : Router → Compiled
         own method path || roots.any (·.isPrefixOf path) || subs.any (·.takes method path)
       handler := middlewares.foldr (· ·) inner }
 
-private def Router.compileAll : List Router → List Compiled
-  | [] => []
-  | r :: rs => r.compile :: Router.compileAll rs
+private def Router.compileAll :
+    (rs : List Router) → Internal.unshadowed ((Router.allRoutesOf rs).map Route.key) = true →
+      List Compiled
+  | [], _ => []
+  | r :: rs, h =>
+    have h := Internal.unshadowed_append _ _ (by rwa [Router.allRoutesOf, List.map_append] at h)
+    r.compile h.1 :: Router.compileAll rs h.2
 end
 
-def Router.toHandler (router : Router) : StatelessHandler :=
-  router.compile.handler
+def Router.toHandler (router : Router)
+    (h : Internal.unshadowed (router.allRoutes.map Route.key) = true := by routes_unshadowed) :
+    StatelessHandler :=
+  (router.compile h).handler
+
+/-- `Router.toHandler` for a router known only at run time, failing as `RouteIndex.ofChecked`
+does. -/
+def Router.toHandlerChecked (router : Router) : Except String StatelessHandler :=
+  let keys := router.allRoutes.map Route.key
+  if h : Internal.unshadowed keys = true then .ok (router.toHandler h)
+  else .error (String.intercalate "\n" (Internal.shadowReport keys))
 
 end Routing
