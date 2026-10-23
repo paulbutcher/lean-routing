@@ -8,8 +8,8 @@ public import Routing.Route
 public meta import Lean.Elab.Tactic
 
 /-!
-A route is *shadowed* when something tried before it takes every request it would match, so it can
-never be dispatched: an earlier route with the same method, or in a `Router`, an earlier router's
+A route is *shadowed* when something tried before it takes every request a link to it makes, so no
+link reaches it: an earlier route with the same method, or in a `Router`, an earlier router's
 slash redirect or mount root (`Internal.Taker`). `RouteIndex.of` (`Trie.lean`) and
 `Router.toHandler` take a proof that no route is, and `routes_unshadowed` supplies it for a table
 known at compile time.
@@ -43,10 +43,16 @@ segment, so a `String` capture covers it. -/
   | .capture _ .nat, .lit b _ => (parseNat? b).isSome
   | _, _ => false
 
-/-- Whether `a` matches every path `b` matches. Both tolerate a trailing `""` alike (`dispatch`), so
-neither can cover a pattern of another length. -/
+@[expose] def isEmptyLit : PathSeg → Bool
+  | .lit s _ => s.isEmpty
+  | .capture .. => false
+
+/-- Whether `a` matches every path `b` matches exactly, so every path a link to `b` gives. No link
+ends with the extra `""` that `dispatch` tolerates, so a route reached only through one counts as
+unreachable, and `a` can take `b`'s final empty literal as that `""`. -/
 @[expose] def covers : List PathSeg → List PathSeg → Bool
   | [], [] => true
+  | [], [b] => isEmptyLit b
   | a :: as, b :: bs => segCovers a b && covers as bs
   | _, _ => false
 
@@ -56,7 +62,7 @@ neither can cover a pattern of another length. -/
   | s :: pre, .lit t _ :: b => s == t && coversPrefix pre b
   | _, _ => false
 
-/-- Whether `t` takes every request a route `method segs` would match. -/
+/-- Whether `t` takes every request a link to a route `method segs` makes. -/
 @[expose] def Taker.blocks : Taker → Method → List PathSeg → Bool
   | .route m a, method, segs | .redirect m a, method, segs => m == method && covers a segs
   | .root pre, _, segs => coversPrefix pre segs
@@ -78,10 +84,6 @@ theorem unshadowed_append (l₁ l₂ : List Taker)
   | cons t rest ih =>
     simp only [List.cons_append, unshadowed, List.all_append, Bool.and_eq_true] at h ⊢
     exact ⟨⟨h.1.1, (ih h.2).1⟩, (ih h.2).2⟩
-
-@[expose] def isEmptyLit : PathSeg → Bool
-  | .lit s _ => s.isEmpty
-  | .capture .. => false
 
 /-- `some a` when `segs` is `a` followed by an empty literal, so a request matching `a` without its
 trailing slash is redirected. `a` itself must not end with one, or the redirect would not take
