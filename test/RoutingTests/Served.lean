@@ -13,8 +13,10 @@ the check's order is the router's.
 
 namespace Routing
 
-open Std Http Server
+open Std Http
 open Internal
+
+variable {e : Engine}
 
 theorem method_beq_iff (a b : Method) : (a == b) = true ↔ a = b := by
   cases a <;> cases b <;> decide
@@ -181,7 +183,7 @@ theorem split_append {l₁ l₂ pre post : List Taker} {x : Taker}
       exact .inl ⟨c'', by simp⟩
 
 mutual
-theorem compile_takes_iff : ∀ (r : Router) (h) (m : Method) (p : List String),
+theorem compile_takes_iff : ∀ (r : Router e) (h) (m : Method) (p : List String),
     (compile r h).takes m p = true ↔ ∃ t ∈ r.takers, t.Takes m p
   | { middlewares, routes, routers, fallback }, h, m, p => by
     have ih := compileAll_takes_iff routers
@@ -200,7 +202,7 @@ theorem compile_takes_iff : ∀ (r : Router) (h) (m : Method) (p : List String),
       · exact .inr (by simpa [List.any_eq_true] using (ih _ m p).2 ⟨t, ht, htt⟩)
       · exact .inl (.inr ⟨root, hr, htt⟩)
 
-theorem compileAll_takes_iff : ∀ (rs : List Router) (h) (m : Method) (p : List String),
+theorem compileAll_takes_iff : ∀ (rs : List (Router e)) (h) (m : Method) (p : List String),
     (compileAll rs h).any (·.takes m p) = true ↔ ∃ t ∈ Router.takersOf rs, t.Takes m p
   | [], _, _, _ => by simp [compileAll, Router.takersOf]
   | r :: rs, h, m, p => by
@@ -222,7 +224,7 @@ theorem not_route_mem_redirects {own : List (Route α)} {m : Method} {b : List P
   cases h
 
 mutual
-theorem compile_served : ∀ (r : Router) (h) (m : Method) (target : RequestTarget)
+theorem compile_served : ∀ (r : Router e) (h) (m : Method) (target : RequestTarget)
     (pre post : List Taker) (b : List PathSeg), r.takers = pre ++ .route m b :: post →
     Accepts b (decodedPath target) → (∀ t ∈ pre, ¬t.Takes m (decodedPath target)) →
       (compile r h).served m target = some ⟨m, b⟩
@@ -265,7 +267,7 @@ theorem compile_served : ∀ (r : Router) (h) (m : Method) (target : RequestTarg
     · have : Taker.route m b ∈ (Entry.listRoots routes).map Taker.root := by rw [h₂]; simp
       simp at this
 
-theorem compileAll_served : ∀ (rs : List Router) (h) (m : Method) (target : RequestTarget)
+theorem compileAll_served : ∀ (rs : List (Router e)) (h) (m : Method) (target : RequestTarget)
     (pre post : List Taker) (b : List PathSeg), Router.takersOf rs = pre ++ .route m b :: post →
     Accepts b (decodedPath target) → (∀ t ∈ pre, ¬t.Takes m (decodedPath target)) →
       ∃ c, (compileAll rs h).find? (·.takes m (decodedPath target)) = some c ∧
@@ -294,7 +296,7 @@ end
 
 /-- Every route in a router that passes the check is the one it serves a link to that route with.
 -/
-theorem Router.serves_link (r : Router) (h : unshadowed r.takers = true) {pre post : List Taker}
+theorem Router.serves_link (r : Router e) (h : unshadowed r.takers = true) {pre post : List Taker}
     {m : Method} {b : List PathSeg} (hr : r.takers = pre ++ .route m b :: post) :
     ∃ path, Exact b path ∧ ∀ target, decodedPath target = path →
       (compile r h).served m target = some ⟨m, b⟩ := by

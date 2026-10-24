@@ -19,3 +19,14 @@ if matches=$(grep -rnE '^[[:space:]]*(public[[:space:]]+)?import[[:space:]]+Lean
 fi
 
 echo "ok: the library imports the Lean package only as 'meta import'"
+
+# Nor may it name a server. That is an engine package's business (`std/`, `leanin/`), and the core
+# importing one would put it in the dependency graph of every consumer of the other.
+if matches=$(grep -rnE '^[[:space:]]*(public[[:space:]]+)?(meta[[:space:]]+)?import[[:space:]]+(Std\.Http\.Server|Std\.Async|LeanIn)([.[:space:]]|$)' \
+    Routing.lean Routing 2>/dev/null); then
+  echo "error: the library must not import a server:" >&2
+  echo "$matches" >&2
+  exit 1
+fi
+
+echo "ok: the library imports no server"

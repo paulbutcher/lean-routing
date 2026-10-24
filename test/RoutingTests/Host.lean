@@ -2,7 +2,7 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Routing.Router
+import RoutingStd
 import RoutingTests.RoundTrip
 
 /-!
@@ -174,11 +174,11 @@ theorem resolvedHost_slashLocation (b : String) (target : RequestTarget) :
 #guard requestSegments "/./admin" = some [".", "admin"]
 #guard requestSegments "/admin/./x" = some ["admin", ".", "x"]
 
-private def ok (body : String) : Result := fun _ => Response.ok.text body
+private def ok (body : String) : Result .std := fun _ => Response.ok.text body
 
 private def emptyRoot : MountPoint := ⟨[""], by decide⟩
 
-private def router : Router :=
+private def router : Router .std :=
   { routes := [.mount emptyRoot
       [ .mount ⟨["admin"], by decide⟩ [.get [] (ok "admin")],
         .get [.capture "s" .string, .lit ""] ok ] ] }

@@ -1,18 +1,21 @@
 # Routing
 
-A typed HTTP router for Lean 4 / [`Std.Http`](https://leanprover-community.github.io/mathlib4_docs/Std/Http.html). Route patterns like `"/users/:id:Nat"` determine the exact type your handler must have; a wrong-arity or wrong-type handler is a compile error, not a runtime bug.
+A typed HTTP router for Lean 4, over [`Std.Http`](https://leanprover-community.github.io/mathlib4_docs/Std/Http.html)'s request and response types, served by `Std.Http.Server` or by [LeanIn](https://github.com/scidonia/leanin) (see [Engines](#engines)). Route patterns like `"/users/:id:Nat"` determine the exact type your handler must have; a wrong-arity or wrong-type handler is a compile error, not a runtime bug.
 
 See: [Formally verified CRUD](https://paulbutcher.com/lean2.html).
 
 ## Installation
 
-Add to your `lakefile.toml`:
+Add an engine to your `lakefile.toml`; it requires `routing` itself:
 
 ```toml
 [[require]]
-name = "routing"
+name = "routing-std"
 git = "https://github.com/paulbutcher/lean-routing.git"
+subDir = "std"
 ```
+
+For LeanIn, `name = "routing-leanin"` and `subDir = "leanin"`. A library that only declares routes and links, or writes handlers for any engine, can require `routing` alone.
 
 ## Usage
 
@@ -32,14 +35,13 @@ This is a macro which parses the route specifications and generates `AppName.pat
 ### 2. Combine route handlers into an application
 
 ```lean
-import Std.Http.Server
-import Routing
+import RoutingStd
 
 open Std Http Server
 open Routing
 open AppName
 
-def app : StatelessHandler := [
+def app : StatelessHandler .std := [
     .get patterns.index (fun request => Response.ok.text "home"),
     .get patterns.user (fun (id : Nat) request => Response.ok.text s!"user #{id}"),
     .post patterns.userPost (fun (id : Nat) (slug : String) request => Response.ok.text s!"user #{id}, post {slug}")
@@ -52,10 +54,16 @@ A route that an earlier one with the same method always beats is a compile error
 
 ### 3. Wire into a server
 
+A `StatelessHandler .std` is a `Std.Http.Server.Handler`, so it is served as it is:
+
 ```lean
 def main : IO Unit := do
-  ... Std.Http.Server.run app ...
+  let addr : Net.SocketAddress := .v4 { addr := Net.IPv4Addr.ofParts 127 0 0 1, port := 8080 }
+  let _ ← Async.toIO (Server.serve addr app)
+  ...
 ```
+
+On LeanIn, `app.toLeanIn` is the `StdHandler` that `LeanIn.Http.Server.serveConnStd` serves; [bench/RoutingBench/ServeLeanIn.lean](bench/RoutingBench/ServeLeanIn.lean) is a complete server.
 
 ### Generating links
 
@@ -96,11 +104,11 @@ A mounted index renders with a trailing slash, as the unmounted index `/` has, s
 `mount_routes "prefix" routes` is the handler-level counterpart: it takes a `List (Route _)` built against a sub-app's own *unprefixed* patterns and re-targets it under a literal prefix, so a module's handlers can be written once and mounted anywhere:
 
 ```lean
-def blogRoutes : List (Route Result) :=
+def blogRoutes : List (Route (Result .std)) :=
   [ .get Blog.patterns.index (fun request => Response.ok.text "blog home"),
     .get Blog.patterns.post (fun (slug : String) request => Response.ok.text s!"post {slug}") ]
 
-def app : StatelessHandler :=
+def app : StatelessHandler .std :=
   ( [ .get AppName.patterns.index (fun request => Response.ok.text "home") ] ++
     mount_routes "/blog" blogRoutes
   ) |> toHandler
@@ -110,22 +118,22 @@ Like `mount`, no handler wrapping is needed for the prefix. Unlike `mount`, nest
 
 ### Routers and middleware
 
-A `Router` groups routes behind its own middleware, so different parts of an application can sit behind different stacks. A middleware is any `StatelessHandler → StatelessHandler`, such as those in [lean-middleware](https://github.com/paulbutcher/lean-middleware); a router applies its list in order, the first outermost, once when `Router.toHandler` builds it.
+A `Router` groups routes behind its own middleware, so different parts of an application can sit behind different stacks. A middleware is any `StatelessHandler e → StatelessHandler e`. One written against `Std.Http.Server.StatelessHandler`, such as those in [lean-middleware](https://github.com/paulbutcher/lean-middleware), runs on `.std` as `fun h => .ofStd (mw h.toStd)`. a router applies its list in order, the first outermost, once when `Router.toHandler` builds it.
 
 ```lean
-def api : Router :=
+def api : Router .std :=
   { middlewares := [requireToken],
     routes := [ .mount AppName.patterns.blog
       [ .get Blog.patterns.index (fun request => Response.ok.text "blog home"),
         .get Blog.patterns.post (fun (slug : String) request => Response.ok.text s!"post {slug}") ] ],
     fallback := some blogNotFound }
 
-def site : Router :=
+def site : Router .std :=
   { middlewares := [logging],
     routes := [ .get AppName.patterns.index (fun request => Response.ok.text "home") ],
     routers := [api] }
 
-def app : StatelessHandler := site.toHandler
+def app : StatelessHandler .std := site.toHandler
 ```
 
 A mount takes every request under its root, and its entries are written against the mounted table's own unprefixed `patterns`. Its root is a table's `patterns` value, which records where that table is mounted (`AppName.patterns.blog.mountedAt.segs = ["blog"]`, and `AppName.links.blog.mountedAt = "/blog"`), or a `MountPoint` no table describes. Like a pattern, a root cannot hold a `.` or `..` segment: a literal one such as `.mk ["admin"]` is checked at compile time, and one built at run time comes from `MountPoint.ofSegs? ["t", tenant]`, which returns `none` for an invalid segment. Mounts nest, each root prefixed by those enclosing it.
@@ -168,6 +176,21 @@ This comes out the same whichever prefix `Blog` is mounted under (or none at all
 
 Linking to a strict descendant of the current page needs its own segment repeated (`relativeUrl "/posts/5" "/posts/5/edit" = "5/edit"`, not `"edit"`); that is the standard RFC 3986 rule that treats the current page's last segment as a "file", not a directory. Linking *up* to an ancestor page renders as a directory reference (`"."`/`".."`), which resolves to a trailing-slash URL; `dispatch` tolerates that trailing slash once a pattern is otherwise fully matched, so the link still reaches its target.
 
+## Engines
+
+An `Engine` (`Routing/Engine.lean`) is what the router needs of a server: the monad handlers run in, the one its hooks run in, and its request and response body types. Requests and responses are `Std.Http`'s on every engine, so a handler reads `request.line.uri` and sets `response.line.headers` the same way on both.
+
+| Package | Engine | A handler returns | Needs |
+|---|---|---|---|
+| `routing-std` ([std/](std/)) | `.std` | `ContextAsync (Response Body.Any)`, as for `Std.Http.Server` | nothing beyond Lean |
+| `routing-leanin` ([leanin/](leanin/)) | `.leanin` | `LeanIn.Runtime.VM (Response LeanIn.Http.ResponseBody)` | libuv, and LeanIn's `main` until a release carries its `StdHandler` |
+
+Code written for either engine takes `{e : Engine}` and builds a body with `e.text`, as [bench/RoutingBench/App.lean](bench/RoutingBench/App.lean) does. `routing` and `routing-std` keep the guarantee that the Lean package stays out of a consumer's binary; `routing-leanin` cannot, because LeanIn imports it. LeanIn's `serveConnStd` requires `continuePolicy := .application`, so that `onContinue` decides, and does not report a stall before the request head, or a head its parser rejects, to `onFailure`.
+
+Moving from 0.12 to `routing-std`: require it, import `RoutingStd`, and write `Result .std`, `StatelessHandler .std`, `Router .std` and `Entry .std` where the unparameterised names were. `Handler.ofFn` becomes `StatelessHandler.ofFn`. Handler bodies are unchanged.
+
+[bench/](bench/README.md) measures the two engines serving one application.
+
 ## Formal verification
 
 - Pattern round trip ([test/RoutingTests/Pattern.lean](test/RoutingTests/Pattern.lean), `parsePattern_renderPattern`): rendering a list of well-formed segments to a pattern string and parsing it back recovers exactly those segments.
@@ -190,6 +213,8 @@ There is no external suite for a router, so these check behaviour against the sp
 - [test/RoutingTests/RelativeLink.lean](test/RoutingTests/RelativeLink.lean): the RFC 3986 edge cases, that a same-page link is not the empty same-document reference, that a first segment holding `:` is not read as a scheme nor an empty one as an absolute path, and that an upward `"."` link resolves to a trailing-slash path `dispatch` still serves.
 - [test/RoutingTests/Server.lean](test/RoutingTests/Server.lean): the real `toHandler` against a real `Std.Http` request, checking that the matched route reaches both the request's and the response's `extensions`, that a 404 carries none, and that a mounted index requested without its slash gets a `308` with the query intact.
 - [test/RoutingTests/Router.lean](test/RoutingTests/Router.lean): a `Router` tree against real requests, checking middleware order, which router serves a hit and which answers a miss under a mount, the full pattern reported on both request and response, and that `Expect: 100-continue` is decided by the router that would serve the request.
+- [test/RoutingTests/Engine.lean](test/RoutingTests/Engine.lean): the core on an engine with no server behind it, checking the `404` and the slash redirect, the two responses it builds through `Engine.text`.
+- [leanin/test/RoutingLeanInTests/Engines.lean](leanin/test/RoutingLeanInTests/Engines.lean): one route table, middleware and `Router`, written once, against both engines, checking each answers every request, and every continue, as the other does.
 
 ## Property-based testing
 

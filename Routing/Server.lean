@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Std.Http.Server
+public import Routing.Engine
 public import Routing.Trie
 
 public section
@@ -13,15 +13,12 @@ public section
 
 namespace Routing
 
-open Std Async
-open Std Http Server
-
-abbrev Result := Request Body.Stream → ContextAsync (Response Body.Any)
+open Std Http
 
 /-- Default `404 Not Found` response used by `toHandler` when no route
 matches. -/
-def defaultNotFound : Result :=
-  fun _request => Response.notFound.text "Not Found"
+def defaultNotFound {e : Engine} : Result e :=
+  fun _request => e.text Response.notFound "Not Found"
 
 /-- Reads back the `MatchedRoute` `toHandler` published, from a request's or a response's
 `extensions`. `none` means no route matched; absence is the signal, so a 404 is distinguishable
@@ -73,8 +70,8 @@ in *both* directions, because they reach different readers. The request copy is 
 matched handler and to anything the router calls into. The response copy is the one visible to
 middleware *wrapping* the router: such middleware has already passed its request downwards by the
 time matching happens, so the response is the only channel that travels back up to it. -/
-def respond? (routes : RouteIndex Result) (request : Request Body.Stream) :
-    Option (ContextAsync (Response Body.Any)) :=
+def respond? {e : Engine} (routes : RouteIndex (Result e)) (request : Request e.ReqBody) :
+    Option (e.M (Response e.RespBody)) :=
   let path := decodedPath request.line.uri
   match routes.matchTable request.line.method path with
   | some (matched, handler) => some do
@@ -82,18 +79,19 @@ def respond? (routes : RouteIndex Result) (request : Request Body.Stream) :
       return { response with extensions := response.extensions.insert matched }
   | none =>
       (slashRedirect? routes request.line.method request.line.uri path).map fun location =>
-        Response.withStatus .permanentRedirect |>.header Header.Name.location location |>.text ""
+        e.text (Response.withStatus .permanentRedirect |>.header Header.Name.location location) ""
 
-/-- Wires a route table into a `Std.Http.Server.Handler`, answering with `respond?`, else with
+/-- Wires a route table into a `StatelessHandler`, answering with `respond?`, else with
 `notFound`. -/
-def RouteIndex.toHandler (routes : RouteIndex Result) (notFound : Result := defaultNotFound) :
-    StatelessHandler :=
-  Handler.ofFn fun request => (respond? routes request).getD (notFound request)
+def RouteIndex.toHandler {e : Engine} (routes : RouteIndex (Result e))
+    (notFound : Result e := defaultNotFound) : StatelessHandler e :=
+  .ofFn fun request => (respond? routes request).getD (notFound request)
 
 /-- `RouteIndex.toHandler` over `RouteIndex.of routes`, so build the handler once. -/
-def toHandler (routes : List (Route Result)) (notFound : Result := defaultNotFound)
+def toHandler {e : Engine} (routes : List (Route (Result e)))
+    (notFound : Result e := defaultNotFound)
     (h : Internal.unshadowed (routes.map Route.key) = true := by routes_unshadowed) :
-    StatelessHandler :=
+    StatelessHandler e :=
   (RouteIndex.of routes h).toHandler notFound
 
 end Routing

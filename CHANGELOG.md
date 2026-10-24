@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+- `routing` names no server: `Result`, `StatelessHandler`, `Router` and `Entry` take the `Engine` they run on.
+- Add the `routing-std` package (`std/`), the `Std.Http.Server` engine `.std`.
+- Add the `routing-leanin` package (`leanin/`), the LeanIn engine `.leanin`.
+
 ## [0.12.0] - 2026-10-24
 
 - A route that an earlier one with the same method always beats is a compile error in `toHandler`, `Router.toHandler` and `RouteIndex.of`, as is one behind an earlier router's mount root or slash redirect.

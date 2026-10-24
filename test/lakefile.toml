@@ -7,6 +7,10 @@ name = "routing"
 path = ".."
 
 [[require]]
+name = "routing-std"
+path = "../std"
+
+[[require]]
 name = "plausible"
 git = "https://github.com/leanprover-community/plausible"
 rev = "v4.34.0"

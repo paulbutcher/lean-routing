@@ -9,6 +9,7 @@ public import Routing.Handler
 public import Routing.Route
 public import Routing.Shadow
 public import Routing.Trie
+public import Routing.Engine
 public import Routing.Server
 public import Routing.Router
 public import Routing.RouteTable
@@ -38,7 +39,11 @@ already-built routes. Either way an app composes from independently-declared fea
 unprefixed links, wherever the module ends up mounted.
 
 A `Router` (`Routing/Router.lean`) groups routes, and mounts of them, behind its own middleware,
-and flattens them to the same `List (Route Result)` that `toHandler` serves.
+and flattens them to the same `List (Route (Result e))` that `toHandler` serves.
+
+None of this names a server. `Routing/Engine.lean` says what the router needs of one, and the
+`routing-std` and `routing-leanin` packages (`std/`, `leanin/`) supply it for `Std.Http.Server` and
+for LeanIn.
 
 ## Limitations
 

@@ -2,7 +2,7 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Routing.Router
+import RoutingStd
 import Routing.RouteTable
 import RoutingTests.RoundTrip
 
@@ -19,10 +19,10 @@ route_table ShadowApp
     first := "/todos/1",
     padded := "/todos/01" ]
 
-private def ok : Result := fun _ => Response.ok.text "ok"
+private def ok : Result .std := fun _ => Response.ok.text "ok"
 
 -- One path under two methods is fine, and so is a literal ahead of a capture that would take it.
-private def restHandler : StatelessHandler :=
+private def restHandler : StatelessHandler .std :=
   toHandler
     [ .get ShadowApp.patterns.list ok,
       .post ShadowApp.patterns.create ok,
@@ -31,11 +31,11 @@ private def restHandler : StatelessHandler :=
       .get ShadowApp.patterns.byName fun _ => ok ]
 
 -- A `Nat` capture takes only canonical digits.
-private def paddedHandler : StatelessHandler :=
+private def paddedHandler : StatelessHandler .std :=
   toHandler [ .get ShadowApp.patterns.item fun _ => ok, .get ShadowApp.patterns.padded ok ]
 
 -- A handler may close over a value known only at run time.
-private def greeter (greeting : String) : StatelessHandler :=
+private def greeter (greeting : String) : StatelessHandler .std :=
   toHandler [ .get ShadowApp.patterns.list fun _ => Response.ok.text greeting ]
 
 /--
@@ -46,7 +46,7 @@ GET /todos/1 is unreachable behind GET /todos/:name:String
 GET /todos/:id:Nat is unreachable behind GET /todos/:name:String
 -/
 #guard_msgs in
-private def shadowedHandler : StatelessHandler :=
+private def shadowedHandler : StatelessHandler .std :=
   toHandler
     [ .get ShadowApp.patterns.byName fun _ => ok,
       .get ShadowApp.patterns.new ok,
@@ -60,7 +60,7 @@ error: could not synthesize default value for parameter 'h' using tactics
 error: routes_unshadowed: a route's method or pattern is only known at run time; build the table with `RouteIndex.ofChecked`
 -/
 #guard_msgs in
-private def runtimeMethod (method : Method) : StatelessHandler :=
+private def runtimeMethod (method : Method) : StatelessHandler .std :=
   toHandler [ route method ShadowApp.patterns.list ok ]
 
 private def checkedRoutes (method : Method) : List (Route String) :=
@@ -71,11 +71,11 @@ private def checkedRoutes (method : Method) : List (Route String) :=
   | .error e => e == "GET /todos is unreachable behind GET /todos"
   | .ok _ => false
 
-private def apiRouter : Router :=
+private def apiRouter : Router .std :=
   { routes := [ .get ShadowApp.patterns.first ok ] }
 
 -- A router tries its own routes before its sub-routers'.
-private def siteRouter (inner : Router) : Router :=
+private def siteRouter (inner : Router .std) : Router .std :=
   { routes := [ .get ShadowApp.patterns.item fun _ => ok ], routers := [ inner ] }
 
 /--
@@ -84,18 +84,18 @@ error: could not synthesize default value for parameter 'h' using tactics
 error: GET /todos/1 is unreachable behind GET /todos/:id:Nat
 -/
 #guard_msgs in
-private def siteHandler : StatelessHandler := (siteRouter apiRouter).toHandler
+private def siteHandler : StatelessHandler .std := (siteRouter apiRouter).toHandler
 
-private def apiFirst : Router := { routers := [ apiRouter, siteRouter {} ] }
+private def apiFirst : Router .std := { routers := [ apiRouter, siteRouter {} ] }
 
 #guard (apiFirst.toHandlerChecked).toBool
 #guard !((siteRouter apiRouter).toHandlerChecked).toBool
 
-private def todosMount : Entry := .mount (.mk ["todos"]) [ .get [] ok ]
+private def todosMount : Entry .std := .mount (.mk ["todos"]) [ .get [] ok ]
 
-private def listRouter : Router := { routes := [ .get ShadowApp.patterns.list ok ] }
+private def listRouter : Router .std := { routes := [ .get ShadowApp.patterns.list ok ] }
 
-private def itemRouter : Router := { routes := [ .get ShadowApp.patterns.item fun _ => ok ] }
+private def itemRouter : Router .std := { routes := [ .get ShadowApp.patterns.item fun _ => ok ] }
 
 -- A router takes every request under its mount roots, and redirects `/todos` to its `/todos/`.
 /--
@@ -106,7 +106,7 @@ GET /todos is unreachable behind the router mounted at /todos
 GET /todos/:id:Nat is unreachable behind the router mounted at /todos
 -/
 #guard_msgs in
-private def siblingHandler : StatelessHandler :=
+private def siblingHandler : StatelessHandler .std :=
   Router.toHandler { routers := [ { routes := [ todosMount ] }, listRouter, itemRouter ] }
 
 -- A router's own redirects come before its sub-routers, but its mount roots don't.
@@ -116,10 +116,10 @@ error: could not synthesize default value for parameter 'h' using tactics
 error: GET /todos is unreachable behind the redirect from GET /todos to /todos/
 -/
 #guard_msgs in
-private def parentHandler : StatelessHandler :=
+private def parentHandler : StatelessHandler .std :=
   Router.toHandler { routes := [ todosMount ], routers := [ listRouter ] }
 
-private def parentWithItem : StatelessHandler :=
+private def parentWithItem : StatelessHandler .std :=
   Router.toHandler { routes := [ todosMount ], routers := [ itemRouter ] }
 
 -- The link `/todos/` reaches `GET /todos`, which takes the trailing slash `dispatch` tolerates.
@@ -129,10 +129,10 @@ error: could not synthesize default value for parameter 'h' using tactics
 error: GET /todos/ is unreachable behind GET /todos
 -/
 #guard_msgs in
-private def slashHandler : StatelessHandler :=
+private def slashHandler : StatelessHandler .std :=
   toHandler [ .get ShadowApp.patterns.list ok, .get [.lit "todos", .lit ""] ok ]
 
-private def slashFirst : StatelessHandler :=
+private def slashFirst : StatelessHandler .std :=
   toHandler [ .get [.lit "todos", .lit ""] ok, .get ShadowApp.patterns.list ok ]
 
 

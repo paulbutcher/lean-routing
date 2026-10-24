@@ -1,0 +1,15 @@
+name = "routing-leanin-tests"
+defaultTargets = ["RoutingLeanInTests"]
+testDriver = "RoutingLeanInTests"
+
+[[require]]
+name = "routing-leanin"
+path = ".."
+
+# Each engine's answers are checked against the other's.
+[[require]]
+name = "routing-std"
+path = "../../std"
+
+[[lean_lib]]
+name = "RoutingLeanInTests"

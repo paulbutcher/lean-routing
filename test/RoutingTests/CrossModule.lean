@@ -22,8 +22,8 @@ def itemRoute : Route String :=
   .get App.patterns.leaf.item (handler := fun (slug : String) => s!"item {slug}")
 
 -- The coercion a table generates reaches here, so its `patterns` names a mount point.
-def leafMount : Entry :=
-  .mount App.patterns.leaf [ .get Leaf.patterns.index fun _ => Std.Http.Response.ok.text "leaf" ]
+def leafMount {e : Engine} : Entry e :=
+  .mount App.patterns.leaf [ .get Leaf.patterns.index fun _ => e.text Std.Http.Response.ok "leaf" ]
 
 -- Each field of a mount's `Links` is `linkFor` of the prefixed segments, checked against the
 -- mounted table's own field type, which is `LinkType` of the unprefixed ones.

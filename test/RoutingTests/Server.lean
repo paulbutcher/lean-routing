@@ -2,7 +2,7 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Routing.Server
+import RoutingStd
 import Routing.RouteMount
 
 /-!
@@ -25,7 +25,7 @@ deriving TypeName
 
 private def userSegs : List PathSeg := [.lit "users", .capture "id" .nat]
 
-private def serverRoutes : List (Route Result) :=
+private def serverRoutes : List (Route (Result .std)) :=
   [ .get userSegs (handler := fun (id : Nat) request => do
       let response ← Response.ok.text s!"user #{id}"
       return { response with
@@ -64,11 +64,11 @@ private def check (label : String) (ok : Bool) : IO Unit :=
   check "404 should not reach a route handler" seen.isNone
   check s!"404 response should carry no template, got {repr pattern}" (pattern == none)
 
-private def blogOwnRoutes : List (Route Result) :=
+private def blogOwnRoutes : List (Route (Result .std)) :=
   [ .get [] (handler := fun _request => Response.ok.text "blog"),
     .post [.lit "posts"] (handler := fun _request => Response.ok.text "posted") ]
 
-private def blogRoutes : List (Route Result) := mount_routes "/blog" blogOwnRoutes
+private def blogRoutes : List (Route (Result .std)) := mount_routes "/blog" blogOwnRoutes
 
 private def statusAndLocation (method : Method) (target : String) :
     IO (Status × Option String) :=

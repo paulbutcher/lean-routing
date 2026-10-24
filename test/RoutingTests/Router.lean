@@ -2,7 +2,7 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Routing.Router
+import RoutingStd
 import Routing.RouteTable
 
 namespace Routing
@@ -74,13 +74,13 @@ private structure Trace where
   names : List String
 deriving TypeName
 
-private def tag (name : String) (h : StatelessHandler) : StatelessHandler :=
+private def tag (name : String) (h : StatelessHandler .std) : StatelessHandler .std :=
   { h with onRequest := fun request => do
       let response ← h.onRequest request
       let names := ((response.extensions.get Trace).map (·.names)).getD []
       return { response with extensions := response.extensions.insert (Trace.mk (names ++ [name])) } }
 
-private def refuseContinue (h : StatelessHandler) : StatelessHandler :=
+private def refuseContinue (h : StatelessHandler .std) : StatelessHandler .std :=
   { h with onContinue := fun _ => pure false }
 
 /-- The template the handler saw on its own request. -/
@@ -88,9 +88,9 @@ private structure TemplateSeen where
   template : Option String
 deriving TypeName
 
-private def ok (body : String) : Result := fun _ => Response.ok.text body
+private def ok (body : String) : Result .std := fun _ => Response.ok.text body
 
-private def apiRouter : Router :=
+private def apiRouter : Router .std :=
   { middlewares := [tag "api", refuseContinue]
     routes :=
       [ .mount RouterSite.patterns.api
@@ -100,9 +100,9 @@ private def apiRouter : Router :=
               let seen := TemplateSeen.mk (matchedPattern? request.extensions)
               return { response with extensions := response.extensions.insert seen },
             .mount RouterApi.patterns.v1 [ .get RouterV1.patterns.ping (ok "pong") ] ] ]
-    fallback := some (Handler.ofFn fun _ => Response.badRequest.text "api miss") }
+    fallback := some (StatelessHandler.ofFn fun _ => Response.badRequest.text "api miss") }
 
-private def tenantRouter : Router :=
+private def tenantRouter : Router .std :=
   { routes := ["acme", ".."].filterMap fun tenant =>
       (MountPoint.ofSegs? ["t", tenant]).map fun root => .mount root [ .get [] (ok tenant) ] }
 
@@ -116,16 +116,16 @@ error: Tactic `decide` proved that the proposition
 is false
 -/
 #guard_msgs in
-example : Entry := .mount { segs := ["t", ".."] } []
+example : Entry .std := .mount { segs := ["t", ".."] } []
 
-private def siteRouter : Router :=
+private def siteRouter : Router .std :=
   { middlewares := [tag "outer", tag "inner"]
     routes :=
       [ .get RouterSite.patterns.home (ok "home"),
         .get [.lit "api", .lit "special"] (ok "special") ]
     routers := [apiRouter, tenantRouter] }
 
-private def siteHandler : StatelessHandler := siteRouter.toHandler
+private def siteHandler : StatelessHandler .std := siteRouter.toHandler
 
 private structure Outcome where
   status : Status
