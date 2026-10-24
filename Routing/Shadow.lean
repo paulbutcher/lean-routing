@@ -127,10 +127,27 @@ end Internal
 /-- Closes `Internal.unshadowed keys = true` by evaluating it, reporting each shadowed route if it
 is false. A handler may mention a local value, but a method or pattern may not, since then the table
 is only known at run time; see `RouteIndex.ofChecked`. Dropping a handler means reducing the table,
-so one defined in another module must be `@[expose]`d. -/
-syntax (name := routesUnshadowed) "routes_unshadowed" : tactic
+so one defined in another module must be `@[expose]`d.
+
+The proof is `native_decide`'s, which trusts the compiler and carries an axiom of its own;
+`routes_unshadowed +kernel` has the kernel check it instead, with only the standard axioms. Either
+way the handlers are dropped first, so the proof holds for a table whose handlers mention a local
+value, an engine a library leaves to its application among them, which `decide +kernel` alone does
+not. -/
+syntax (name := routesUnshadowed) "routes_unshadowed" optConfig : tactic
 
 open Lean Elab Tactic Meta
+
+meta section
+
+/-- `routes_unshadowed`'s options. -/
+structure RoutesUnshadowedConfig where
+  /-- Have the kernel check the proof, rather than `native_decide`. -/
+  kernel : Bool := false
+
+declare_config_elab elabRoutesUnshadowedConfig RoutesUnshadowedConfig
+
+end
 
 private meta unsafe def shadowReportOfUnsafe (keys : Expr) : MetaM (List String) :=
   evalExpr (List String) (mkApp (mkConst ``List [.zero]) (mkConst ``String))
@@ -139,14 +156,17 @@ private meta unsafe def shadowReportOfUnsafe (keys : Expr) : MetaM (List String)
 @[implemented_by shadowReportOfUnsafe]
 private meta opaque shadowReportOf (keys : Expr) : MetaM (List String)
 
-@[tactic routesUnshadowed] meta def evalRoutesUnshadowed : Tactic := fun _ => do
+@[tactic routesUnshadowed] meta def evalRoutesUnshadowed : Tactic := fun stx => do
+  let config ← elabRoutesUnshadowedConfig stx[1]
   let goal ← getMainGoal
   let some (_, lhs, _) := (← instantiateMVars (← goal.getType)).eq?
     | throwError "routes_unshadowed: expected a goal `Internal.unshadowed keys = true`"
   let_expr Internal.unshadowed keys := lhs
     | throwError "routes_unshadowed: expected a goal `Internal.unshadowed keys = true`"
-  -- Reducing drops the handlers, which are all a local value can usually reach.
-  let keys ← if keys.hasFVar then reduce keys else pure keys
+  -- Reducing drops the handlers, which are all a local value can usually reach, and leaves the
+  -- keys as constructors. Evaluating them unreduced would need what computes them, such as
+  -- `Router.takers`, imported as `meta` by the module the table is in.
+  let keys ← reduce keys
   if keys.hasFVar || keys.hasMVar then
     -- A definition another module doesn't expose reaches this one as an axiom, with no body.
     let env ← getEnv
@@ -163,6 +183,6 @@ private meta opaque shadowReportOf (keys : Expr) : MetaM (List String)
   let goal ← goal.replaceTargetDefEq
     (← mkEq (mkApp (mkConst ``Internal.unshadowed) keys) (mkConst ``true))
   replaceMainGoal [goal]
-  evalTactic (← `(tactic| native_decide))
+  evalTactic (← if config.kernel then `(tactic| decide +kernel) else `(tactic| native_decide))
 
 end Routing

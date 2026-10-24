@@ -84,8 +84,8 @@ structure RouteIndex (result : Type) where
   unshadowed : Internal.unshadowed (routes.toList.map Route.key) = true
 
 /-- `h` is settled while compiling, for a table known then; otherwise use `RouteIndex.ofChecked`.
-The default proof uses `native_decide`; `by decide +kernel` proves it with only the standard
-axioms. -/
+The default proof uses `native_decide`; `by routes_unshadowed +kernel` proves it with only the
+standard axioms. -/
 def RouteIndex.of (routes : List (Route result))
     (h : Internal.unshadowed (routes.map Route.key) = true := by routes_unshadowed) :
     RouteIndex result :=
