@@ -16,6 +16,11 @@ namespace Routing
 open Std Async
 open Std.Http
 
+/-- Not `Builder.bytes`, which sets a content type of its own. -/
+def Engine.stdBytes (builder : Response.Builder) (content : ByteArray) :
+    ContextAsync (Response Body.Any) := do
+  return builder.body (Body.Any.ofBody (← Body.Full.ofByteArray content))
+
 /-- `Std.Http.Server`: handlers in `ContextAsync` over a `Body.Stream`, answering with a
 `Body.Any`, exactly as `Std.Http.Server.StatelessHandler`'s are. -/
 @[reducible] def Engine.std : Engine where
@@ -23,7 +28,13 @@ open Std.Http
   Hook := Async
   ReqBody := Body.Stream
   RespBody := Body.Any
-  text builder content := builder.text content
+  text := Engine.textOf Engine.stdBytes
+
+instance : ServerEngine .std where
+  readBody body maximum := body.readAll (maximumSize := some maximum.toUInt64)
+  -- A `Body.Stream` carries nothing but its bytes; the peer address is the request's extension.
+  replaceBody _ bytes := Body.fromBytes bytes
+  bytes := Engine.stdBytes
 
 def StatelessHandler.toStd (h : StatelessHandler .std) : Server.StatelessHandler :=
   { onRequest := h.onRequest, onFailure := h.onFailure, onContinue := h.onContinue }

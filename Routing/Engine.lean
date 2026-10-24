@@ -32,6 +32,13 @@ structure Engine where
 
 attribute [instance] Engine.monad Engine.hookMonad
 
+/-- `text` from a function building a response from bytes, setting a plain-text content type, so
+that engines whose `text` is this answer alike. -/
+def Engine.textOf {M : Type → Type} {RespBody : Type}
+    (bytes : Response.Builder → ByteArray → M (Response RespBody))
+    (builder : Response.Builder) (content : String) : M (Response RespBody) :=
+  bytes (builder.header Header.Name.contentType (.mk "text/plain; charset=utf-8")) content.toUTF8
+
 /-- A route's handler once its captures are applied. -/
 abbrev Result (e : Engine) := Request e.ReqBody → e.M (Response e.RespBody)
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+- Add `ServerEngine`, what a handler generic over its engine needs: bounded body reads, body replacement, byte bodies, `IO`, and errors.
+
 ## [0.13.0] - 2026-10-24
 
 - `routing` names no server: `Result`, `StatelessHandler`, `Router` and `Entry` take the `Engine` they run on.

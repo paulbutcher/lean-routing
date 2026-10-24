@@ -10,6 +10,7 @@ public import Routing.Route
 public import Routing.Shadow
 public import Routing.Trie
 public import Routing.Engine
+public import Routing.ServerEngine
 public import Routing.Server
 public import Routing.Router
 public import Routing.RouteTable

@@ -16,6 +16,10 @@ namespace Routing
 open Std.Http
 open LeanIn.Http
 
+def Engine.leaninBytes (builder : Response.Builder) (content : ByteArray) :
+    LeanIn.Runtime.VM (Response LeanIn.Http.ResponseBody) :=
+  pure (builder.body (.bytes content))
+
 /-- LeanIn: handlers and hooks in its `VM`, over its streaming `BodyReader`, answering with its
 `ResponseBody`, buffered or streamed. -/
 @[reducible] def Engine.leanin : Engine where
@@ -23,9 +27,42 @@ open LeanIn.Http
   Hook := LeanIn.Runtime.VM
   ReqBody := Server.BodyReader
   RespBody := LeanIn.Http.ResponseBody
-  text builder content := pure <|
-    builder.header Header.Name.contentType (.mk "text/plain; charset=utf-8")
-      |>.body (.bytes content.toUTF8)
+  text := Engine.textOf Engine.leaninBytes
+
+/-- `body`, failing as `Std`'s `Body.Stream.readAll` does once more than `maximum` bytes arrive.
+A read either ends the body or brings it a byte nearer the limit, so `maximum + 2` reads reach one
+or the other; running out means a reader that keeps answering with nothing. -/
+def Engine.leaninRead (body : Server.BodyReader) (maximum : Nat) : LeanIn.Runtime.VM ByteArray :=
+  go (maximum + 2) .empty
+where
+  go : Nat → ByteArray → LeanIn.Runtime.VM ByteArray
+    | 0, _ => throw (.userError "the request body yielded empty reads without ending")
+    | fuel + 1, acc => do
+      match ← body.recv 65536 with
+      | none => pure acc
+      | some chunk =>
+        let acc := acc ++ chunk
+        if acc.size > maximum then
+          throw (.userError s!"body exceeded maximum size of {maximum} bytes")
+        go fuel acc
+
+/-- A reader handing out `bytes` in pieces no larger than each `recv` asks for. The rest is
+`body`'s own: the peer address, and the bytes after the body that the driver resumes from. -/
+def Engine.leaninReplace (body : Server.BodyReader) (bytes : ByteArray) :
+    LeanIn.Runtime.VM Server.BodyReader := do
+  let rest ← (IO.mkRef bytes : IO _)
+  return { body with
+    recv := fun n => (rest.modifyGet fun r =>
+        if r.isEmpty then (none, r)
+        else
+          let k := min (max n 1) r.size
+          (some (r.extract 0 k), r.extract k r.size) : IO _)
+    drained := ((·.isEmpty) <$> rest.get : IO _) }
+
+instance : ServerEngine .leanin where
+  readBody := Engine.leaninRead
+  replaceBody := Engine.leaninReplace
+  bytes := Engine.leaninBytes
 
 /-- What `Server.serveConnStd` serves. Its `Config.continuePolicy` must be `.application`, so that
 `onContinue` makes the decision. -/

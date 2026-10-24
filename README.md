@@ -185,7 +185,16 @@ An `Engine` (`Routing/Engine.lean`) is what the router needs of a server: the mo
 | `routing-std` ([std/](std/)) | `.std` | `ContextAsync (Response Body.Any)`, as for `Std.Http.Server` | nothing beyond Lean |
 | `routing-leanin` ([leanin/](leanin/)) | `.leanin` | `LeanIn.Runtime.VM (Response LeanIn.Http.ResponseBody)` | libuv, and LeanIn's `main` until a release carries its `StdHandler` |
 
-Code written for either engine takes `{e : Engine}` and builds a body with `e.text`, as [bench/RoutingBench/App.lean](bench/RoutingBench/App.lean) does. `routing` and `routing-std` keep the guarantee that the Lean package stays out of a consumer's binary; `routing-leanin` cannot, because LeanIn imports it. LeanIn's `serveConnStd` requires `continuePolicy := .application`, so that `onContinue` decides, and does not report a stall before the request head, or a head its parser rejects, to `onFailure`.
+Code written for either engine takes `{e : Engine}` and builds a body with `e.text`, as [bench/RoutingBench/App.lean](bench/RoutingBench/App.lean) does. A handler or middleware that needs more of its engine, as one shipped in a library does, takes `{e : Engine} [ServerEngine e]` (`Routing/ServerEngine.lean`), which both engine packages provide:
+
+- `readBody body maximum`: the whole request body, failing once it passes `maximum` bytes; `readText` decodes it as UTF-8.
+- `replaceBody body bytes`: a body reading as `bytes` and otherwise as `body` was, for a middleware that reads the body and hands one on.
+- `bytes builder content`: a response with that body, and the content type `builder` sets; `html`, `empty` and `e.text` are built from it, so both engines answer them alike.
+- Lifts of `IO` into the handler and hook monads, of the hook monad into the handler's, so that a middleware can call `onFailure`, and `MonadExcept IO.Error` and `MonadFinally` for the handler's.
+
+A `catchAll` written this way sees different failures on each engine: LeanIn ends a request whose connection fails without raising an error a handler could catch, and tells `onFailure` itself. [leanin/test/RoutingLeanInTests/ServerEngine.lean](leanin/test/RoutingLeanInTests/ServerEngine.lean) is a router and two middlewares written this way.
+
+`routing` and `routing-std` keep the guarantee that the Lean package stays out of a consumer's binary; `routing-leanin` cannot, because LeanIn imports it. LeanIn's `serveConnStd` requires `continuePolicy := .application`, so that `onContinue` decides, and does not report a stall before the request head, or a head its parser rejects, to `onFailure`.
 
 Moving from 0.12 to `routing-std`: require it, import `RoutingStd`, and write `Result .std`, `StatelessHandler .std`, `Router .std` and `Entry .std` where the unparameterised names were. `Handler.ofFn` becomes `StatelessHandler.ofFn`. Handler bodies are unchanged.
 

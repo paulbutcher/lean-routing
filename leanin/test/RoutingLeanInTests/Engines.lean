@@ -2,8 +2,7 @@
 Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import RoutingStd
-import RoutingLeanIn
+import RoutingLeanInTests.Harness
 
 /-!
 One route table, one middleware and one `Router`, each written once over any engine, answer the
@@ -39,90 +38,18 @@ private def router {e : Engine} : Router e :=
         .mount (.mk ["blog"]) [ .get [] (ok "blog") ] ]
     routers := [ { middlewares := [refuseContinue], routes := [ .post [.lit "upload"] (ok "up") ] } ] }
 
-private structure Outcome where
-  status : Status
-  body : ByteArray
-  route : Option String
-  location : Option String
+private def stdHandler : StatelessHandler .std := router.toHandler
 
-private def outcomeOf (line : Response.Head) (body : ByteArray) : Outcome :=
-  { status := line.status, body
-    route := (line.headers.get? (.mk "x-route")).map toString
-    location := (line.headers.get? Header.Name.location).map toString }
-
-private def targetOf (target : String) : IO RequestTarget :=
-  match RequestTarget.parse? target with
-  | some uri => pure uri
-  | none => throw (IO.userError s!"test target {target.quote} is not a valid request target")
-
-private def headOf (method : Method) (target : String) : IO Request.Head := do
-  return { method, version := .v11, uri := ← targetOf target }
-
-section Std
-
-open Std.Async
-
-private partial def drain (body : Body.Any) (acc : ByteArray) : Async ByteArray := do
-  match ← body.recv with
-  | some chunk => drain body (acc ++ chunk.data)
-  | none => pure acc
-
-private def runStd (method : Method) (target : String) : IO Outcome := do
-  let line ← headOf method target
-  Async.block <| ContextAsync.run do
-    let body ← Body.empty
-    let response ← (router.toHandler : StatelessHandler .std).onRequest { line, body }
-    return outcomeOf response.line (← drain response.body .empty)
-
-private def continuesStd (target : String) : IO Bool := do
-  Async.block <| (router.toHandler : StatelessHandler .std).onContinue (← headOf .post target)
-
-end Std
-
-section LeanIn
-
-private def runVM (m : LeanIn.Runtime.VM α) : IO α := do
-  let cell ← LeanIn.Runtime.RawCell.new
-  LeanIn.Runtime.VM.runToCell m cell
-  let out ← IO.mkRef none
-  LeanIn.Runtime.RawCell.await cell (fun v => out.set (some v))
-  match ← out.get with
-  | some v => pure v
-  | none => throw (IO.userError "the VM suspended, which no handler here should")
-
-private def emptyBody : LeanIn.Http.Server.BodyReader :=
-  { recv := fun _ => pure none, drained := pure true, leftover := pure .empty }
-
-private def bytesOf : LeanIn.Http.ResponseBody → LeanIn.Runtime.VM ByteArray
-  | .bytes data => pure data
-  | .stream _ write => do
-    let acc ← (IO.mkRef ByteArray.empty : IO _)
-    write fun chunk => (acc.modify (· ++ chunk) : IO Unit)
-    (acc.get : IO _)
-
-private def runLeanIn (method : Method) (target : String) : IO Outcome := do
-  let line ← headOf method target
-  runVM do
-    let response ← (router.toHandler : StatelessHandler .leanin).toLeanIn.onRequest
-      { line, body := emptyBody }
-    return outcomeOf response.line (← bytesOf response.body)
-
-private def continuesLeanIn (target : String) : IO Bool := do
-  let head ← headOf .post target
-  runVM ((router.toHandler : StatelessHandler .leanin).toLeanIn.onContinue head)
-
-end LeanIn
-
-private def check (label : String) (ok : Bool) : IO Unit :=
-  unless ok do throw (IO.userError label)
+private def leaninHandler : StatelessHandler .leanin := router.toHandler
 
 private def expect (method : Method) (target : String) (status : Status) (body : String)
     (route location : Option String := none) : IO Unit := do
-  for (engine, run) in [("std", runStd), ("leanin", runLeanIn)] do
+  for (engine, run) in [("std", runStd stdHandler), ("leanin", runLeanIn leaninHandler)] do
     let o ← run method target
+    let (r, l) := (o.header? "x-route", o.header? "location")
     check s!"{engine} {target}: status {repr o.status}, body {String.fromUTF8? o.body}, \
-        route {o.route}, location {o.location}"
-      (o.status == status && o.body == body.toUTF8 && o.route == route && o.location == location)
+        route {r}, location {l}"
+      (o.status == status && o.body == body.toUTF8 && r == route && l == location)
 
 #eval show IO Unit from do
   expect .get "/hello" .ok "hello" (route := some "/hello")
@@ -133,7 +60,8 @@ private def expect (method : Method) (target : String) (status : Status) (body :
   expect .post "/upload" .ok "up" (route := some "/upload")
 
   -- The sub-router that would serve `/upload` decides its continue, on either engine.
-  for (engine, continues) in [("std", continuesStd), ("leanin", continuesLeanIn)] do
+  for (engine, continues) in
+      [("std", continuesStd stdHandler), ("leanin", continuesLeanIn leaninHandler)] do
     check s!"{engine}: /upload should refuse its continue" !(← continues "/upload")
     check s!"{engine}: /hello should accept its continue" (← continues "/hello")
 
