@@ -53,3 +53,17 @@ In memory (`benchDispatch 100000`), nanoseconds per request, the median of three
 - Routing is not where the time goes on either engine: a request costs LeanIn about 11 µs at 32 connections and `Std.Http.Server` about 143 µs, against at most a quarter of a microsecond to match it and about one to run the handler.
 - `Std.Http.Server` serves fewer requests as connections rise, while LeanIn serves more, so the ratio grows with concurrency.
 - Ten headers cost LeanIn about 10 µs a request at 32 connections, close to the microsecond a header its conversion to `Std.Http` headers is measured at in LeanIn's own `docs/PERFORMANCE.md`. That conversion is the price of the `Std.Http` types every engine shares here, and it narrows the gap for browser traffic to 2.8–7.2×.
+
+### `Std.Http.Server` under concurrency
+
+LeanIn's own [README](https://github.com/scidonia/leanin/blob/main/README.md) shows `Std.Http.Server` at much the same magnitude but serving *more* requests as connections rise (5 323 / 5 584 / 7 626 at 1 / 8 / 32), where it serves fewer above. Three checks, the same day and host, two rounds of 3 s each, not through `run.sh`:
+
+| server | server CPUs | wrk | C=1 | C=8 | C=32 |
+|---|---|---|---:|---:|---:|
+| LeanIn's bare `stdServer`, no routing | 1 | 2 threads, 2 CPUs | 9 379 / 8 697 | 8 488 / 9 536 | 7 126 / 6 906 |
+| `benchStd` | 1 | 1 thread, 1 CPU | 9 520 / 9 442 | 9 211 / 8 662 | 6 995 / 7 316 |
+| `benchStd` | 4 | 2 threads, 2 CPUs | 2 534 / 2 521 | 5 295 / 5 236 | 4 213 / 4 195 |
+
+- The decline is `Std.Http.Server`'s, not routing's: LeanIn's server without routing shows it too.
+- Nor is it `wrk`'s threads: one thread on one CPU, closer to LeanIn's single Node client, shows it too.
+- More CPUs make `Std.Http.Server` slower, not faster, which fits its tasks handing each request between threads at a cost that is low on one core and high across cores. That is untested, as are the two differences left between this and LeanIn's figures: the client program, Node's `load.mjs` there, and the machine, x86 there.
