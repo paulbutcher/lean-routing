@@ -9,7 +9,7 @@ open Lake DSL
 the same version, and all are bumped together whether or not each one changed: an application
 resolves `routing` and an engine together, and one number says which pair it holds. -/
 package routing where
-  version := v!"0.13.0"
+  version := v!"0.13.1"
 
 @[default_target]
 lean_lib Routing

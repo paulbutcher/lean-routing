@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.13.1] - 2026-10-24
 
 - Add `ServerEngine`, what a handler generic over its engine needs: bounded body reads, body replacement, byte bodies, `IO`, and errors.
 - Add `routes_unshadowed +kernel`, which proves a table with only the standard axioms, including one written over any engine.
