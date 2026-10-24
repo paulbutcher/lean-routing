@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+- `ServerEngine` provides `MonadExceptOf IO.Error` in place of `MonadExcept`, which follows from it, so that it lifts through `ReaderT` and its like.
+- On `.std`, a streamed response starts nothing until its body is read, so one built and then dropped leaves nothing behind.
+
 ## [0.14.0] - 2026-10-24
 
 - `ServerEngine.readBody` answers a `BodyRead`, and `readText` a `TextRead`, so a body over the limit or not UTF-8 is a result rather than an error.

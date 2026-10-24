@@ -37,7 +37,9 @@ class ServerEngine (e : Engine) where
   [hookLiftIO : MonadLiftT IO e.Hook]
   /-- So that a middleware catching a failure can run `onFailure` itself. -/
   [liftHook : MonadLiftT e.Hook e.M]
-  [monadExcept : MonadExcept IO.Error e.M]
+  /-- `MonadExceptOf` rather than `MonadExcept`, which follows from it but not the other way round,
+  and which transformers such as `ReaderT` lift only from `MonadExceptOf`. -/
+  [monadExceptOf : MonadExceptOf IO.Error e.M]
   [monadFinally : MonadFinally e.M]
   /-- The whole body, or `tooLarge` once more than `maximum` bytes have arrived, so that a client
   cannot make a handler hold more of its body than the handler chose to. -/
@@ -55,7 +57,7 @@ class ServerEngine (e : Engine) where
     (write : (ByteArray → e.M Unit) → e.M Unit) → e.M (Response e.RespBody)
 
 attribute [instance_reducible, instance] ServerEngine.liftIO ServerEngine.hookLiftIO
-  ServerEngine.liftHook ServerEngine.monadExcept ServerEngine.monadFinally
+  ServerEngine.liftHook ServerEngine.monadExceptOf ServerEngine.monadFinally
 
 namespace ServerEngine
 

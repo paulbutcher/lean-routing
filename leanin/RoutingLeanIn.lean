@@ -59,6 +59,10 @@ def Engine.leaninReplace (body : Server.BodyReader) (bytes : ByteArray) :
     drained := ((·.isEmpty) <$> rest.get : IO _) }
 
 instance : ServerEngine .leanin where
+  -- `VM` has only `MonadExcept IO.Error`. This is its `throw` and `tryCatch` under the name the
+  -- class needs, here rather than as an instance of our own, which would reach every program
+  -- importing this one and outlive the instance LeanIn should provide itself.
+  monadExceptOf := { throw := throw, tryCatch := tryCatch }
   readBody := Engine.leaninRead
   replaceBody := Engine.leaninReplace
   bytes := Engine.leaninBytes

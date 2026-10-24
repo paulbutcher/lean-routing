@@ -119,9 +119,18 @@ out of place or lost shows. -/
 private def chunks : List ByteArray :=
   (List.range 4).map fun i => ByteArray.mk (Array.replicate 70000 (i + 1).toUInt8)
 
+/-- What `Telemetry.span` asks of its monad, which `MonadExcept` alone does not give. -/
+private def recovering {m : Type → Type} [Monad m] [MonadExceptOf IO.Error m] (x : m Nat) : m Nat :=
+  tryCatchThe IO.Error x fun _ => pure 0
+
 private def bodies {e : Engine} [ServerEngine e] : StatelessHandler e :=
   toHandler
-    [ .post [.lit "sized"] fun request => do
+    [ -- In a `ReaderT` over the engine's monad, as `Telemetry.span` runs in `TelemetryT`.
+      .get [.lit "recover"] fun _ => do
+        let n ← ReaderT.run (recovering (m := ReaderT Nat e.M) do
+          if (← read) > 0 then throwThe IO.Error (.userError "boom") else read) 7
+        e.text Response.ok s!"recovered {n}",
+      .post [.lit "sized"] fun request => do
         match ← readBody request.body bigLimit with
         | .ok bytes => e.text Response.ok s!"{bytes.size}"
         | .tooLarge => e.text Response.ok "tooLarge",
@@ -156,6 +165,11 @@ private def bodies {e : Engine} [ServerEngine e] : StatelessHandler e :=
       (o.status == .ok && o.body == chunks.foldl (· ++ ·) .empty &&
         o.header? "content-type" == some "application/octet-stream")
 
+    let o ← run .get "/recover" .empty
+    check s!"{engine}: an error should be caught in a ReaderT over the engine's monad, got \
+        {String.fromUTF8? o.body}"
+      (o.body == "recovered 0".toUTF8)
+
 /-- A streamed response whose producer records that it ran. -/
 private def lazyResponse {e : Engine} [ServerEngine e] (started : IO.Ref Bool) :
     e.M (Response e.RespBody) :=
@@ -178,5 +192,45 @@ private def lazyResponse {e : Engine} [ServerEngine e] (started : IO.Ref Bool) :
   check "std: a dropped streamed response should not run its producer" !(← dropped.get)
   check "std: a streamed response closed unread should not run its producer" !(← closed.get)
   check "leanin: an unsent streamed response should not run its producer" !(← leanin.get)
+
+/-- `response` split at the end of its head: the head as text, and the body's bytes. -/
+private def splitResponse (response : ByteArray) : Option (String × ByteArray) := do
+  let blank := "\r\n\r\n".toUTF8
+  let i ← (List.range (min response.size 4096)).find? fun i => response.extract i (i + 4) == blank
+  return (← String.fromUTF8? (response.extract 0 i), response.extract (i + 4) response.size)
+
+/-- `Std.Http.Server`'s own connection code serving `handler` one request over an in-memory
+transport, which reads a response body through `recvSelector` as a socket's connection does. -/
+private def serveStd (handler : StatelessHandler .std) (method target : String) :
+    IO (String × ByteArray) := do
+  let out ← IO.mkRef ByteArray.empty
+  Std.Http.Internal.Test.checkTimed s!"{method} {target}" (ms := 5000)
+    s!"{method} {target} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n" handler.onRequest
+    (out.set ·)
+  match splitResponse (← out.get) with
+  | some response => pure response
+  | none => throw (IO.userError s!"{method} {target}: no response head")
+
+#eval show IO Unit from do
+  let whole := chunks.foldl (· ++ ·) ByteArray.empty
+  let (head, body) ← serveStd bodies "GET" "/stream"
+  check s!"std server: a streamed response should declare its length, got {head}"
+    ((head.toLower.splitOn s!"content-length: {whole.size}").length > 1)
+  check s!"std server: a streamed body should arrive whole and in order, got {body.size} bytes"
+    (body == whole)
+
+  -- A `HEAD` response's body is closed without being read; the `GET` shows the producer runs when
+  -- one is read, so that the `HEAD` check is not vacuous.
+  let (served, headed) := (← IO.mkRef false, ← IO.mkRef false)
+  let lazy (started : IO.Ref Bool) : StatelessHandler .std :=
+    toHandler [ { method := .get, segs := [.lit "lazy"], handler := fun _ => lazyResponse served },
+      { method := .head, segs := [.lit "lazy"], handler := fun _ => lazyResponse started } ]
+  let (_, body) ← serveStd (lazy headed) "GET" "/lazy"
+  let (head, _) ← serveStd (lazy headed) "HEAD" "/lazy"
+  IO.sleep 50
+  check s!"std server: a read streamed response should run its producer, got {body.size} bytes"
+    ((← served.get) && body.size > 0)
+  check s!"std server: a HEAD response should not run its producer, got {head}"
+    (head.startsWith "HTTP/1.1 200" && !(← headed.get))
 
 end RoutingLeanInTests.ServerEngine

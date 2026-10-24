@@ -50,26 +50,86 @@ where
         let acc := acc ++ chunk.data
         if acc.size > maximum then pure .tooLarge else go fuel acc
 
+/-- Where a streamed body is: not yet read, with the size it will declare; closed before anything
+read it; or reading from the stream its producer sends into. -/
+inductive Engine.StreamState where
+  | waiting (size : Option Body.Length)
+  | closed
+  | started (body : Body.Any)
+
 /-- A body sending what `write` sends. `Body.stream` would start `write` at once, but a response can
 be built and then dropped, by a middleware answering `304` in its place say, and nothing then
 closes its body: `write` would wait on its first chunk, and hold what it opened, for as long as the
-process runs. So `write` waits for a reader, and does not run at all for a body closed unread. -/
+process runs.
+
+So nothing is started until something reads. Until then the body is these closures and the
+`waiting` state: no stream, no task and nothing registered anywhere, so a dropped body is freed as
+any other value is. The first `recv`, `tryRecv` or use of `recvSelector` makes the stream and
+starts `write` sending into it, once, under the mutex. Asking the size and closing start nothing,
+which is what `Std.Http.Server` does with a `HEAD` response's body. -/
 def Engine.stdStream (builder : Response.Builder) (length? : Option Nat)
     (write : (ByteArray → ContextAsync Unit) → ContextAsync Unit) :
     ContextAsync (Response Body.Any) := do
   let context ← read
-  let s ← Body.mkStream
-  s.setKnownSize (some (length?.elim .chunked .fixed))
-  -- In `Async`, as `Body.stream` runs its producer, rather than tied to the request, which may
-  -- finish before its body is sent.
-  (background (do
-    try
-      if ← Selectable.one #[.case s.interestSelector pure] then
-        ReaderT.run (write fun chunk => s.send (Chunk.ofByteArray chunk)) context
-      s.close
-    catch err =>
-      s.closeWithError err) : Async Unit)
-  return builder.body (Body.Any.ofBody s)
+  let state ← Std.Mutex.new (StreamState.waiting (some (length?.elim .chunked .fixed)))
+  -- The stream to read from, made and its producer started on the first call; `none` once closed.
+  let started : Async (Option Body.Any) := do
+    let (body?, fresh?) ← state.atomically do
+      match ← get with
+      | .started body => return (some body, none)
+      | .closed => return (none, none)
+      | .waiting size =>
+        let s ← Body.mkStream
+        s.setKnownSize size
+        let body := Body.Any.ofBody s
+        set (StreamState.started body)
+        return (some body, some s)
+    if let some s := fresh? then
+      -- In `Async`, as `Body.stream` runs its producer, rather than tied to the request, which may
+      -- finish before its body is sent.
+      background do
+        try
+          ReaderT.run (write fun chunk => s.send (Chunk.ofByteArray chunk)) context
+          s.close
+        catch err =>
+          s.closeWithError err
+    return body?
+  let current : Async StreamState := state.atomically get
+  let body : Body.Any :=
+    { recv := do (← started).elim (pure none) (·.recv)
+      tryRecv := do (← started).elim (pure (some none)) (·.tryRecv)
+      recvSelector :=
+        { tryFn := do (← started).elim (pure (some none)) (·.recvSelector.tryFn)
+          registerFn := fun waiter => do
+            match ← started with
+            | some body => body.recvSelector.registerFn waiter
+            | none => waiter.race (pure ()) fun promise => promise.resolve (.ok none)
+          unregisterFn := do
+            if let .started body ← current then body.recvSelector.unregisterFn }
+      close := do
+        let body? ← state.atomically do
+          match ← get with
+          | .started body => return some body
+          | _ => set StreamState.closed; return none
+        if let some body := body? then body.close
+      isClosed := do
+        match ← current with
+        | .waiting _ => return false
+        | .closed => return true
+        | .started body => body.isClosed
+      getKnownSize := do
+        match ← current with
+        | .waiting size => return size
+        | .closed => return some (.fixed 0)
+        | .started body => body.getKnownSize
+      setKnownSize := fun size => do
+        let body? ← state.atomically do
+          match ← get with
+          | .waiting _ => set (StreamState.waiting size); return none
+          | .closed => return none
+          | .started body => return some body
+        if let some body := body? then body.setKnownSize size }
+  return builder.body body
 
 instance : ServerEngine .std where
   readBody := Engine.stdRead
