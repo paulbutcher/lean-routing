@@ -42,11 +42,23 @@ where
       | some chunk => go fuel (acc ++ chunk.data)
       | none => pure acc
 
+/-- `body` in pieces of at most `piece` bytes. -/
+def piecesOf (body : ByteArray) (piece : Nat := 65536) : List ByteArray :=
+  (List.range ((body.size + piece - 1) / piece)).map fun i =>
+    body.extract (i * piece) ((i + 1) * piece)
+
+/-- A request body arriving as `piecesOf` it, each piece its own read, as a client sending a large
+one would. -/
+def stdBodyOf (body : ByteArray) : Std.Async.Async Body.Stream :=
+  Body.stream fun s => do
+    for piece in piecesOf body do
+      s.send (Chunk.ofByteArray piece)
+
 def runStd (h : StatelessHandler .std) (method : Method) (target : String)
     (body : ByteArray := .empty) : IO Outcome := do
   let line ← headOf method target
   Std.Async.Async.block <| Std.Async.ContextAsync.run do
-    let response ← h.onRequest { line, body := ← Body.fromBytes body }
+    let response ← h.onRequest { line, body := ← stdBodyOf body }
     return { status := response.line.status, headers := response.line.headers
              body := ← drainStd response.body }
 
@@ -62,12 +74,17 @@ def runVM (m : LeanIn.Runtime.VM α) : IO α := do
   | some v => pure v
   | none => throw (IO.userError "the VM suspended, which no handler here should")
 
-/-- A reader handing out `body` in one piece, as a driver might. -/
+/-- A reader handing out `body` in pieces no larger than each `recv` asks for, as LeanIn's driver
+does. -/
 def readerOf (body : ByteArray) (peer : Option Std.Net.SocketAddress := none) :
     IO LeanIn.Http.Server.BodyReader := do
-  let rest ← IO.mkRef (if body.isEmpty then none else some body)
-  return { recv := fun _ => (rest.modifyGet fun r => (r, none) : IO _)
-           drained := ((·.isNone) <$> rest.get : IO _)
+  let rest ← IO.mkRef body
+  return { recv := fun n => (rest.modifyGet fun r =>
+             if r.isEmpty then (none, r)
+             else
+               let k := min (max n 1) r.size
+               (some (r.extract 0 k), r.extract k r.size) : IO _)
+           drained := ((·.isEmpty) <$> rest.get : IO _)
            leftover := pure .empty
            peer }
 

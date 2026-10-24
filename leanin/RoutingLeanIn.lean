@@ -29,22 +29,21 @@ def Engine.leaninBytes (builder : Response.Builder) (content : ByteArray) :
   RespBody := LeanIn.Http.ResponseBody
   text := Engine.textOf Engine.leaninBytes
 
-/-- `body`, failing as `Std`'s `Body.Stream.readAll` does once more than `maximum` bytes arrive.
-A read either ends the body or brings it a byte nearer the limit, so `maximum + 2` reads reach one
-or the other; running out means a reader that keeps answering with nothing. -/
-def Engine.leaninRead (body : Server.BodyReader) (maximum : Nat) : LeanIn.Runtime.VM ByteArray :=
+/-- `body`, or `tooLarge` once more than `maximum` bytes arrive. A read either ends the body or
+brings it a byte nearer the limit, so `maximum + 2` reads reach one or the other; running out means
+a reader that keeps answering with nothing. -/
+def Engine.leaninRead (body : Server.BodyReader) (maximum : Nat) :
+    LeanIn.Runtime.VM (BodyRead ByteArray) :=
   go (maximum + 2) .empty
 where
-  go : Nat → ByteArray → LeanIn.Runtime.VM ByteArray
+  go : Nat → ByteArray → LeanIn.Runtime.VM (BodyRead ByteArray)
     | 0, _ => throw (.userError "the request body yielded empty reads without ending")
     | fuel + 1, acc => do
       match ← body.recv 65536 with
-      | none => pure acc
+      | none => pure (.ok acc)
       | some chunk =>
         let acc := acc ++ chunk
-        if acc.size > maximum then
-          throw (.userError s!"body exceeded maximum size of {maximum} bytes")
-        go fuel acc
+        if acc.size > maximum then pure .tooLarge else go fuel acc
 
 /-- A reader handing out `bytes` in pieces no larger than each `recv` asks for. The rest is
 `body`'s own: the peer address, and the bytes after the body that the driver resumes from. -/
@@ -63,6 +62,7 @@ instance : ServerEngine .leanin where
   readBody := Engine.leaninRead
   replaceBody := Engine.leaninReplace
   bytes := Engine.leaninBytes
+  stream builder length? write := pure (builder.body (.stream length? write))
 
 /-- What `Server.serveConnStd` serves. Its `Config.continuePolicy` must be `.application`, so that
 `onContinue` makes the decision. -/

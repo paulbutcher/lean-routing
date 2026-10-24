@@ -187,9 +187,10 @@ An `Engine` (`Routing/Engine.lean`) is what the router needs of a server: the mo
 
 Code written for either engine takes `{e : Engine}` and builds a body with `e.text`, as [bench/RoutingBench/App.lean](bench/RoutingBench/App.lean) does. A handler or middleware that needs more of its engine, as one shipped in a library does, takes `{e : Engine} [ServerEngine e]` (`Routing/ServerEngine.lean`), which both engine packages provide:
 
-- `readBody body maximum`: the whole request body, failing once it passes `maximum` bytes; `readText` decodes it as UTF-8.
+- `readBody body maximum`: the whole request body as `.ok bytes`, or `.tooLarge` once it passes `maximum` bytes. `readText` also decodes it, answering `.text`, `.tooLarge` or `.notUtf8`. A read that fails, such as a connection closing mid-body, raises instead, so a handler answering `413` for `.tooLarge` cannot mistake one for the other.
 - `replaceBody body bytes`: a body reading as `bytes` and otherwise as `body` was, for a middleware that reads the body and hands one on.
 - `bytes builder content`: a response with that body, and the content type `builder` sets; `html`, `empty` and `e.text` are built from it, so both engines answer them alike.
+- `stream builder length? write`: a response whose body is what `write` sends, a chunk at a time, with its length when known. `write` runs only once the body is being sent, and not at all for one never sent, such as a `HEAD` response or one a `304` replaces, so it should open what it reads from itself and close it in a `finally`. On `.std`, a streamed response built and then dropped leaves a task waiting for a reader that never comes, though `write` does not run.
 - Lifts of `IO` into the handler and hook monads, of the hook monad into the handler's, so that a middleware can call `onFailure`, and `MonadExcept IO.Error` and `MonadFinally` for the handler's.
 
 A `catchAll` written this way sees different failures on each engine: LeanIn ends a request whose connection fails without raising an error a handler could catch, and tells `onFailure` itself. [leanin/test/RoutingLeanInTests/ServerEngine.lean](leanin/test/RoutingLeanInTests/ServerEngine.lean) is a router and two middlewares written this way.

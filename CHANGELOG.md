@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+- `ServerEngine.readBody` answers a `BodyRead`, and `readText` a `TextRead`, so a body over the limit or not UTF-8 is a result rather than an error.
+- Add `ServerEngine.stream`, a response body sent a chunk at a time by a producer that runs only once the body is sent.
+
 ## [0.13.1] - 2026-10-24
 
 - Add `ServerEngine`, what a handler generic over its engine needs: bounded body reads, body replacement, byte bodies, `IO`, and errors.
