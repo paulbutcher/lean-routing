@@ -15,4 +15,5 @@ import RoutingTests.Router
 import RoutingTests.Trie
 import RoutingTests.Shadow
 import RoutingTests.Served
+import RoutingTests.Kernel
 import RoutingTests.Host

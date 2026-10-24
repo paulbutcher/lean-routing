@@ -264,6 +264,91 @@ theorem exact_getLast : ∀ (a : List PathSeg) (q : List String), Exact a q →
   | [], _ :: _, he, _ | _ :: _, [], he, _ | [_], _ :: _ :: _, he, _ => by simp_all [Exact]
   | _ :: _ :: _, [_], he, _ => by simp_all [Exact]
 
+theorem digitChar_of_isDigit {c : Char} (h : c.isDigit = true) :
+    ∃ d < 10, Nat.digitChar d = c := by
+  have hc : 48 ≤ c.toNat ∧ c.toNat ≤ 57 := by
+    simp only [Char.isDigit, Bool.and_eq_true, decide_eq_true_eq, UInt32.le_iff_toNat_le] at h
+    exact ⟨h.1, h.2⟩
+  refine ⟨c.toNat - 48, by omega, ?_⟩
+  rw [← Char.toNat_inj, Nat.toNat_digitChar_of_lt_ten (by omega)]
+  omega
+
+theorem eq_zero_of_head_toDigits (n : Nat) (h : (Nat.toDigits 10 n).head? = some '0') : n = 0 := by
+  induction n using Nat.strongRecOn with
+  | ind n ih =>
+    rw [Nat.toDigits_eq_ite (by decide)] at h
+    split at h
+    · simpa using h
+    · rename_i hn
+      have hne := Nat.toDigits_ne_nil (b := 10) (n := n / 10)
+      obtain ⟨c, cs, hcs⟩ := List.exists_cons_of_ne_nil hne
+      rw [hcs, List.cons_append, List.head?_cons] at h
+      have := ih (n / 10) (by omega) (by rw [hcs]; exact h)
+      omega
+
+theorem canonicalDigits_iff_props (cs : List Char) : canonicalDigits cs = true ↔
+    cs ≠ [] ∧ cs.all Char.isDigit = true ∧ (cs.head? = some '0' → cs = ['0']) := by
+  match cs with
+  | [] => simp [canonicalDigits]
+  | [c] =>
+    simp only [canonicalDigits, ne_eq, List.cons_ne_nil, not_false_eq_true, List.all_cons,
+      List.all_nil, Bool.and_true, List.head?_cons, Option.some.injEq, true_and]
+    constructor
+    · intro h; exact ⟨h, fun hc => by simp [hc]⟩
+    · exact fun h => h.1
+  | c :: d :: rest =>
+    simp only [canonicalDigits, bne_iff_ne, ne_eq, Bool.and_eq_true,
+      List.cons_ne_nil, not_false_eq_true, List.all_cons, List.head?_cons, Option.some.injEq,
+      List.cons.injEq, and_false, imp_false, true_and]
+    constructor
+    · rintro ⟨⟨h0, hc⟩, hd⟩; exact ⟨⟨hc, hd⟩, h0⟩
+    · rintro ⟨⟨hc, hd⟩, h0⟩; exact ⟨⟨h0, hc⟩, hd⟩
+
+theorem canonicalDigits_iff (cs : List Char) :
+    canonicalDigits cs = true ↔ ∃ n, Nat.toDigits 10 n = cs := by
+  rw [canonicalDigits_iff_props]
+  constructor
+  · intro hp
+    induction hk : cs.length using Nat.strongRecOn generalizing cs with
+    | ind k ih =>
+      rcases List.eq_nil_or_concat cs with rfl | ⟨ds, c, rfl⟩
+      · exact absurd rfl hp.1
+      obtain ⟨-, hall, h0⟩ := hp
+      simp only [List.concat_eq_append] at hall h0 hk
+      simp only [List.all_append, List.all_cons, List.all_nil, Bool.and_true,
+        Bool.and_eq_true] at hall
+      obtain ⟨d, hd, rfl⟩ := digitChar_of_isDigit hall.2
+      cases ds with
+      | nil => exact ⟨d, by simp [Nat.toDigits_of_lt_base hd]⟩
+      | cons e es =>
+        have he : e ≠ '0' := fun he => by simpa using h0 (by simp [he])
+        obtain ⟨m, hm⟩ := ih _ (by simp [← hk]) (e :: es)
+          ⟨by simp, hall.1, fun h => absurd (by simpa using h) he⟩ rfl
+        have hm0 : 0 < m := Nat.pos_of_ne_zero fun h =>
+          he (by simp [h, Nat.toDigits_zero] at hm; exact hm.1.symm)
+        refine ⟨10 * m + d, ?_⟩
+        rw [List.concat_eq_append, ← Nat.toDigits_append_toDigits (by decide) hm0 hd, hm,
+          Nat.toDigits_of_lt_base hd]
+  · rintro ⟨n, rfl⟩
+    refine ⟨Nat.toDigits_ne_nil, ?_, fun h => ?_⟩
+    · simp only [List.all_eq_true]
+      exact fun c hc => Nat.isDigit_of_mem_toDigits (by decide) (by decide) hc
+    · rw [eq_zero_of_head_toDigits n h, Nat.toDigits_zero]
+
+theorem canonicalDigits_toList (s : String) : canonicalDigits s.toList = (parseNat? s).isSome := by
+  apply Bool.eq_iff_iff.2
+  rw [canonicalDigits_iff]
+  constructor
+  · rintro ⟨n, hn⟩
+    have : toString n = s := String.ext (by simp only [toString]; rw [Nat.toList_repr, hn])
+    rw [← this, parseNat?_toString]; rfl
+  · intro h
+    obtain ⟨n, hn⟩ := Option.isSome_iff_exists.1 h
+    refine ⟨n, ?_⟩
+    rw [← toString_of_parseNat? hn]
+    simp only [toString]
+    rw [Nat.toList_repr]
+
 theorem accepts_of_covers : ∀ (a b : List PathSeg) (path : List String),
     covers a b = true → Exact b path → Accepts a path
   | [], [], [], _, _ => trivial
@@ -281,7 +366,7 @@ theorem accepts_of_covers : ∀ (a b : List PathSeg) (path : List String),
     | .capture _ .string, .capture _ .string, _ => exact hs
     | .capture _ .string, .capture _ .nat, _ => exact unlinkable_of_parseNat? hs
     | .capture _ .nat, .capture _ .nat, _ => exact hs
-    | .capture _ .nat, .lit _ _, h => simp_all [segCovers, SegOk]
+    | .capture _ .nat, .lit _ _, h => simp_all [segCovers, SegOk, canonicalDigits_toList]
   | [], [.capture ..], _, hc, _ | [], _ :: _ :: _, _, hc, _ | _ :: _, [], _, hc, _ => by
     simp [covers, isEmptyLit] at hc
   | [], [], _ :: _, _, hb | [], [.lit ..], [], _, hb | _ :: _, _ :: _, [], _, hb => hb.elim
@@ -448,7 +533,7 @@ theorem covers_of_exact {L : List String} {K N : Nat} (hf : Fresh L K N) :
       have := hf.len s hsL
       rw [hs, freshString_length] at this
       exact absurd this (Nat.lt_irrefl K)
-    | .capture _ .nat, .lit t _ => simpa [segCovers, SegOk, witSeg] using hs
+    | .capture _ .nat, .lit t _ => simpa [segCovers, SegOk, witSeg, canonicalDigits_toList] using hs
     | .capture _ .nat, .capture _ .nat => rfl
     | .capture _ .nat, .capture _ .string =>
       simp [SegOk, witSeg, parseNat?_freshString hf.pos] at hs
@@ -549,7 +634,7 @@ theorem reachable_of_unshadowed (pre post : List Taker) (m : Method) (b : List P
   | .route m' a, ⟨hm, h⟩ | .redirect m' a, ⟨hm, h⟩ =>
     have := covers_of_accepts hf a b hL h
     subst hm
-    simp_all [Taker.shadows, Taker.blocks, method_beq_self]
+    simp_all [Taker.shadows, Taker.blocks]
   | .root root, h =>
     have := coversPrefix_of_isPrefixOf hf root b hL h
     simp_all [Taker.shadows, Taker.blocks]

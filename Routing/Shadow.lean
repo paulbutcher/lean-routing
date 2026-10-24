@@ -33,6 +33,13 @@ inductive Taker where
   /-- A router's mount root, which takes every request under it, whatever its method. -/
   | root (segs : List String)
 
+/-- Whether `cs` are digits `toString` prints for some number, which is what `parseNat?` accepts.
+Structural, unlike `parseNat?`, so the kernel can evaluate the check (`RouteIndex.of`). -/
+@[expose] def canonicalDigits : List Char → Bool
+  | [] => false
+  | [c] => c.isDigit
+  | c :: cs => c != '0' && c.isDigit && cs.all Char.isDigit
+
 /-- Whether `a` matches every segment `b` matches. A `Nat` capture matches no `unlinkable`
 segment, so a `String` capture covers it. -/
 @[expose] def segCovers : PathSeg → PathSeg → Bool
@@ -40,7 +47,7 @@ segment, so a `String` capture covers it. -/
   | .capture _ .string, .lit b _ => !unlinkable b
   | .capture _ .string, .capture _ _ => true
   | .capture _ .nat, .capture _ .nat => true
-  | .capture _ .nat, .lit b _ => (parseNat? b).isSome
+  | .capture _ .nat, .lit b _ => canonicalDigits b.toList
   | _, _ => false
 
 @[expose] def isEmptyLit : PathSeg → Bool
@@ -64,7 +71,7 @@ unreachable, and `a` can take `b`'s final empty literal as that `""`. -/
 
 /-- Whether `t` takes every request a link to a route `method segs` makes. -/
 @[expose] def Taker.blocks : Taker → Method → List PathSeg → Bool
-  | .route m a, method, segs | .redirect m a, method, segs => m == method && covers a segs
+  | .route m a, method, segs | .redirect m a, method, segs => decide (m = method) && covers a segs
   | .root pre, _, segs => coversPrefix pre segs
 
 /-- Whether `u` is a route that `t`, coming before it, leaves unreachable. -/
