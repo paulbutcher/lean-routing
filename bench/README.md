@@ -1,6 +1,6 @@
 # Engine benchmark
 
-One application, [RoutingBench/App.lean](RoutingBench/App.lean), written once and served by each engine: a literal route, a typed capture, a mounted index and its slash redirect, a miss, 64 literal routes for the trie to skip, and one middleware layer. Nothing here is shipped; it needs libuv and `wrk`, which the devcontainer provides.
+One application, [RoutingBench/App.lean](RoutingBench/App.lean), written once and served by each engine: a literal route, a typed capture, a mounted index and its slash redirect, a miss, 64 literal routes for the trie to skip, and one middleware layer. Nothing here is shipped; it needs libuv and [`wrk`](https://github.com/wg/wrk), which the devcontainer provides.
 
 ## In memory
 
