@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.13.0] - 2026-10-24
 
 - `routing` names no server: `Result`, `StatelessHandler`, `Router` and `Entry` take the `Engine` they run on.
 - Add the `routing-std` package (`std/`), the `Std.Http.Server` engine `.std`.
