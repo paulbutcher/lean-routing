@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 module
 
 public import Routing.RouteTable
+public import Routing.Trie
 
 /-!
 The tables `RoutingTests/CrossModule.lean` consumes. `HandlerType` and `LinkType` both reduce the
@@ -34,3 +35,10 @@ route_table Wrapped
   [ index := "/" ]
 
 end
+
+-- `routes_unshadowed` needs these bodies, in another module, to drop handlers closing over a local.
+def greetings (greeting : String) : List (Route String) :=
+  [ .get Leaf.patterns.index greeting ]
+
+@[expose] def exposedGreetings (greeting : String) : List (Route String) :=
+  [ .get Leaf.patterns.index greeting ]

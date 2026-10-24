@@ -30,3 +30,14 @@ def leafMount : Entry :=
 route_table Outer
   [ sub := mount "/sub" App,
     wrapped := mount "/wrapped" Wrapped ]
+
+/--
+error: could not synthesize default value for parameter 'h' using tactics
+---
+error: routes_unshadowed: `RoutingTests.CrossModule.greetings` is defined in another module without `@[expose]`, so its routes can't be checked here; expose it
+-/
+#guard_msgs in
+def greeter (greeting : String) : RouteIndex String := RouteIndex.of (greetings greeting)
+
+def exposedGreeter (greeting : String) : RouteIndex String :=
+  RouteIndex.of (exposedGreetings greeting)

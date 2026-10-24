@@ -4,7 +4,9 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 module
 
-public import Routing.Route
+public import Routing.Shadow
+-- So a consumer's module can run the check that `RouteIndex.of`'s default argument evaluates.
+public meta import Routing.Shadow
 public import Std.Data.HashMap
 
 /-!
@@ -78,9 +80,25 @@ structure RouteIndex (result : Type) where
   trie : Internal.Trie
   /-- The trie is the one `RouteIndex.of` builds, so `RouteIndex.matchTable_eq` covers every index. -/
   trie_eq : trie = ({} : Internal.Trie).insertAll 0 routes.toList
+  /-- Every route can be dispatched (`Shadow.lean`). -/
+  unshadowed : Internal.unshadowed (routes.toList.map Route.key) = true
 
-def RouteIndex.of (routes : List (Route result)) : RouteIndex result :=
-  { routes := routes.toArray, trie := ({} : Internal.Trie).insertAll 0 routes, trie_eq := by simp }
+/-- `h` is settled while compiling, for a table known then; otherwise use `RouteIndex.ofChecked`.
+The default proof uses `native_decide`; `by decide +kernel` proves it with only the standard
+axioms. -/
+def RouteIndex.of (routes : List (Route result))
+    (h : Internal.unshadowed (routes.map Route.key) = true := by routes_unshadowed) :
+    RouteIndex result :=
+  { routes := routes.toArray, trie := ({} : Internal.Trie).insertAll 0 routes, trie_eq := by simp,
+    unshadowed := by simpa using h }
+
+/-- `RouteIndex.of` for a table known only at run time, failing with a line for each route an
+earlier one shadows. -/
+def RouteIndex.ofChecked (routes : List (Route result)) : Except String (RouteIndex result) :=
+  if h : Internal.unshadowed (routes.map Route.key) = true then
+    .ok (RouteIndex.of routes h)
+  else
+    .error (String.intercalate "\n" (Internal.shadowReport (routes.map Route.key)))
 
 /-- The routes that could match `path`, in table order. -/
 def RouteIndex.candidates (index : RouteIndex result) (path : List String) : List Nat :=

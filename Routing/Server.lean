@@ -85,10 +85,15 @@ def respond? (routes : RouteIndex Result) (request : Request Body.Stream) :
         Response.withStatus .permanentRedirect |>.header Header.Name.location location |>.text ""
 
 /-- Wires a route table into a `Std.Http.Server.Handler`, answering with `respond?`, else with
-`notFound`. It builds a `RouteIndex` over `routes`, so build the handler once. -/
-def toHandler (routes : List (Route Result)) (notFound : Result := defaultNotFound) :
+`notFound`. -/
+def RouteIndex.toHandler (routes : RouteIndex Result) (notFound : Result := defaultNotFound) :
     StatelessHandler :=
-  let routes := RouteIndex.of routes
   Handler.ofFn fun request => (respond? routes request).getD (notFound request)
+
+/-- `RouteIndex.toHandler` over `RouteIndex.of routes`, so build the handler once. -/
+def toHandler (routes : List (Route Result)) (notFound : Result := defaultNotFound)
+    (h : Internal.unshadowed (routes.map Route.key) = true := by routes_unshadowed) :
+    StatelessHandler :=
+  (RouteIndex.of routes h).toHandler notFound
 
 end Routing

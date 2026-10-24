@@ -13,4 +13,7 @@ import RoutingTests.RelativeLink
 import RoutingTests.CrossModule
 import RoutingTests.Router
 import RoutingTests.Trie
+import RoutingTests.Shadow
+import RoutingTests.Served
+import RoutingTests.Kernel
 import RoutingTests.Host
