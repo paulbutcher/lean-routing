@@ -9,7 +9,7 @@ open Lake DSL
 serving on `Std.Http.Server` resolves neither it nor the libuv it links against. -/
 package «routing-leanin» where
   -- Kept in step with `routing`; see the note in the root lakefile.
-  version := v!"0.14.0"
+  version := v!"0.15.0"
 
 require routing from ".."
 

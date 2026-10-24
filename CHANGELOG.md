@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.15.0] - 2026-10-24
 
 - `ServerEngine` provides `MonadExceptOf IO.Error` in place of `MonadExcept`, which follows from it, so that it lifts through `ReaderT` and its like.
 - On `.std`, a streamed response starts nothing until its body is read, so one built and then dropped leaves nothing behind.
