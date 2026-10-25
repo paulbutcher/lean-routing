@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+- `routing-leanin` uses LeanIn's own `MonadExceptOf IO.Error VM`, from LeanIn `main` at `187da2f`.
+
 ## [0.15.0] - 2026-10-24
 
 - `ServerEngine` provides `MonadExceptOf IO.Error` in place of `MonadExcept`, which follows from it, so that it lifts through `ReaderT` and its like.

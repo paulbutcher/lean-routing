@@ -15,7 +15,7 @@ require routing from ".."
 
 -- `main`, for `LeanIn.Http.StdHandler`, which no release carries yet.
 require leanin from git
-  "https://github.com/scidonia/leanin.git" @ "ffe3a0af70d4dee440ac1a61e23398276a5392b6"
+  "https://github.com/scidonia/leanin.git" @ "187da2fc5aae42c3edf8d8ce60fb5be74f0adce8"
 
 @[default_target]
 lean_lib RoutingLeanIn
