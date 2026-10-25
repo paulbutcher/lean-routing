@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.15.1] - 2026-10-25
 
 - `routing-leanin` uses LeanIn's own `MonadExceptOf IO.Error VM`, from LeanIn `main` at `187da2f`.
 
