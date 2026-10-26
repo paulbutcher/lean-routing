@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.15.2] - 2026-10-26
+
+- Each field `route_table` generates carries a docstring showing its row, so hovering over a use shows the route's pattern or mount.
+
 ## [0.15.1] - 2026-10-25
 
 - `routing-leanin` uses LeanIn's own `MonadExceptOf IO.Error VM`, from LeanIn `main` at `187da2f`.
