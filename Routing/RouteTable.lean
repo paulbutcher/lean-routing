@@ -199,10 +199,20 @@ private meta def mountFieldsSrc (env : Environment) (fuel : Nat) (structName : N
     pure (String.intercalate ", " patFields.toList, String.intercalate ", " linkFields.toList)
 termination_by fuel
 
-/-- One row's generated field: its `Patterns`/`Links` field type and value, as Lean source text.
-Computed once per row (`rowGenFor`), reused below by both `Patterns` (3/4) and `Links` (5/6). -/
+/-- `src` as a markdown code span, fenced by more backticks than any run of them inside it. -/
+private meta def codeSpan (src : String) : String :=
+  let (longest, _) := src.foldl (init := (0, 0)) fun (longest, run) c =>
+    if c == '`' then (max longest (run + 1), run + 1) else (longest, 0)
+  let fence := "".pushn '`' (longest + 1)
+  let pad := if src.startsWith "`" || src.endsWith "`" then " " else ""
+  fence ++ pad ++ src ++ pad ++ fence
+
+/-- One row's generated field: its `Patterns`/`Links` field type and value, as Lean source text,
+and the docstring both fields carry, showing the row's source. Computed once per row
+(`rowGenFor`), reused below by both `Patterns` (3/4) and `Links` (5/6). -/
 private meta structure RowGen where
   name : Ident
+  doc : String
   patternsFieldTypeSrc : String
   patternsValueSrc : String
   linksFieldTypeSrc : String
@@ -213,6 +223,7 @@ private meta def rowGenFor (env : Environment) (name : Ident) : RowKind → Comm
       let segsSrc ← segsSrcFor pat
       pure
         { name
+          doc := codeSpan pat.getString.quote
           patternsFieldTypeSrc := "List Routing.PathSeg"
           patternsValueSrc := segsSrc
           linksFieldTypeSrc := s!"Routing.LinkType {segsSrc}"
@@ -225,6 +236,7 @@ private meta def rowGenFor (env : Environment) (name : Ident) : RowKind → Comm
         mountFieldsSrc env maxMountDepth subPatterns s!"{subApp}.patterns" pre
       pure
         { name
+          doc := codeSpan s!"mount {prefixPat.getString.quote} {sub.getId}"
           patternsFieldTypeSrc := toString subPatterns
           patternsValueSrc := "{ " ++ patFieldsSrc ++ " }"
           linksFieldTypeSrc := toString (subApp ++ `Links)
@@ -258,6 +270,14 @@ elab_rules : command
     let env ← getEnv
     let rowGens ← entries.mapM fun (name, kind) => rowGenFor env name kind
 
+    -- Attached once each structure is declared rather than written into its source, where a
+    -- pattern containing `-/` would end the doc comment.
+    let addFieldDocs (structId : Ident) : CommandElabM Unit := do
+      let structName ← resolveGlobalConstNoOverload structId
+      addDocStringCore (structName ++ mountedAtField) "The prefix this table is mounted under."
+      for g in rowGens do
+        addDocStringCore (structName ++ g.name.getId) g.doc
+
     -- 3/4. `structure App.Patterns where name : List Routing.PathSeg ...` and
     -- `def App.patterns : App.Patterns := { name := [PathSeg literal], ... }`.
     --
@@ -279,6 +299,7 @@ elab_rules : command
         rowGens.toList.map fun g => s!"{g.name.getId} : {g.patternsFieldTypeSrc}"
     elabCommandFromSource appId
       s!"structure {patternsTypeIdent.getId} where\n  {patternFieldsSrc}"
+    addFieldDocs patternsTypeIdent
 
     let expose ← exposeSrc
     let patternValFieldsSrc := String.intercalate ", " <|
@@ -309,6 +330,7 @@ elab_rules : command
         rowGens.toList.map fun g => s!"{g.name.getId} : {g.linksFieldTypeSrc}"
     elabCommandFromSource appId
       s!"structure {linksTypeIdent.getId} where\n  {structFieldsSrc}"
+    addFieldDocs linksTypeIdent
 
     let valFieldsSrc := String.intercalate ", " <|
       s!"{mountedAtField} := Routing.mountLink []" ::

@@ -27,6 +27,33 @@ private def editRoute : Route String :=
 #guard dispatchTable [editRoute] .get ["todos", "7", "edit"] = some "edit #7"
 #guard dispatchTable [editRoute] .get ["todos", "notanumber", "edit"] = none
 
+route_table RouteTableDocTest
+  [ edit := "/todos/:id:Nat/edit",
+    dash := "/a-/b",
+    tick := "/a`b``c" ]
+
+route_table RouteTableDocMountTest
+  [ docs := mount "/docs" RouteTableDocTest ]
+
+-- Hovering over a generated field shows the row that declared it. `-/` cannot end a docstring it
+-- is not written into, and a backtick in a pattern needs a longer fence.
+#guard_msgs in
+open Lean in
+run_cmd do
+  let env ← getEnv
+  for (decl, expected) in [
+      (``RouteTableDocTest.Patterns.edit, "`\"/todos/:id:Nat/edit\"`"),
+      (``RouteTableDocTest.Links.edit, "`\"/todos/:id:Nat/edit\"`"),
+      (``RouteTableDocTest.Links.dash, "`\"/a-/b\"`"),
+      (``RouteTableDocTest.Links.tick, "```\"/a`b``c\"```"),
+      (``RouteTableDocMountTest.Patterns.docs, "`mount \"/docs\" RouteTableDocTest`"),
+      (``RouteTableDocMountTest.Links.docs, "`mount \"/docs\" RouteTableDocTest`")] do
+    let actual ← findDocString? env decl
+    unless actual == some expected do
+      throwError "{decl}: expected {repr expected}, got {repr actual}"
+
+#guard RouteTableDocTest.links.dash = "/a-/b"
+
 -- Negative-compile regression: declaring the same name twice is a command-time error, not a
 -- silently-overwritten field.
 /--
