@@ -24,7 +24,7 @@ open Std.Http (Method)
 /-- An HTTP method, a path pattern (as already-parsed segments, so `HandlerType segs result`,
 and therefore `handler`'s arity and types, is checked at the point the route is built), and its
 handler. -/
-structure Route (result : Type) where
+structure Route (result : Type u) where
   method : Method
   segs : List PathSeg
   handler : HandlerType segs result
@@ -33,26 +33,26 @@ structure Route (result : Type) where
 this call site. `segs` is meant to come from a `route_table`-generated `App.Patterns` value
 (`RouteTable.lean`), whose pattern was already validated at the `route_table` row that declared
 it. -/
-def route (method : Method) (segs : List PathSeg) {result : Type}
+def route (method : Method) (segs : List PathSeg) {result : Type u}
     (handler : HandlerType segs result) : Route result :=
   { method, segs, handler }
 
 /-- Per-method aliases for `route`, for `segs` sourced from a `route_table`-generated
 `App.Patterns` value, so a route table can write `.get`/`.post`/`.put`/`.delete` instead of
 `route .get`/`route .post`/etc. -/
-def Route.get (segs : List PathSeg) {result : Type} (handler : HandlerType segs result) :
+def Route.get (segs : List PathSeg) {result : Type u} (handler : HandlerType segs result) :
     Route result :=
   route .get segs handler
 
-def Route.post (segs : List PathSeg) {result : Type} (handler : HandlerType segs result) :
+def Route.post (segs : List PathSeg) {result : Type u} (handler : HandlerType segs result) :
     Route result :=
   route .post segs handler
 
-def Route.put (segs : List PathSeg) {result : Type} (handler : HandlerType segs result) :
+def Route.put (segs : List PathSeg) {result : Type u} (handler : HandlerType segs result) :
     Route result :=
   route .put segs handler
 
-def Route.delete (segs : List PathSeg) {result : Type} (handler : HandlerType segs result) :
+def Route.delete (segs : List PathSeg) {result : Type u} (handler : HandlerType segs result) :
     Route result :=
   route .delete segs handler
 

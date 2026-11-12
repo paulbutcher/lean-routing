@@ -15,7 +15,7 @@ namespace Routing
 
 /-- One argument per capture in `segs`, in order, correctly typed via `CaptureKind.type`;
 literal segments contribute nothing. -/
-def HandlerType (segs : List PathSeg) (result : Type) : Type :=
+def HandlerType (segs : List PathSeg) (result : Type u) : Type u :=
   match segs with
   | [] => result
   | .lit _ _ :: rest => HandlerType rest result
@@ -43,7 +43,7 @@ which an RFC 3986-compliant resolver always turns into a trailing-slash URL) act
 target instead of 404ing.
 
 A `.string` capture never matches an `unlinkable` segment, so a capture always has a working link. -/
-def dispatch {result : Type} :
+def dispatch {result : Type u} :
     (segs : List PathSeg) → HandlerType segs result → List String → Option result
   | [], h, [] => some h
   | [], h, [""] => some h
