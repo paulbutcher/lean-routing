@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.15.3] - 2026-11-13
+
+- A route's result may live in any universe, so `Route`, `RouteIndex` and `dispatch` take a result in `Type u`.
+
 ## [0.15.2] - 2026-10-26
 
 - Each field `route_table` generates carries a docstring showing its row, so hovering over a use shows the route's pattern or mount.
