@@ -3,6 +3,7 @@ Copyright (c) 2026 Paul Butcher. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Routing.Route
+import Routing.Trie
 
 namespace Routing
 
@@ -47,5 +48,23 @@ private def testRoutes : List (Route String) :=
 #guard matchTable testRoutes .get ["users", "nope"] = none
 #guard matchTable testRoutes .get ["missing"] = none
 #guard matchTable testRoutes .put ["notes", "hi"] = none
+
+-- A result may live above `Type`, as a program that quantifies over the type of each answer does.
+private structure Program : Type 1 where
+  Answer : Type
+  describe : Answer → String
+  default : Answer
+
+private def programRoutes : List (Route Program) :=
+  [ .get userSegs (handler := fun (id : Nat) => ⟨Nat, fun n => s!"user #{n}", id⟩),
+    .get noteSegs (handler := fun (slug : String) => ⟨String, id, slug⟩) ]
+
+#guard (dispatchTable programRoutes .get ["users", "7"]).map (fun p => p.describe p.default)
+     = some "user #7"
+#guard (matchTable programRoutes .get ["notes", "hi"]).map (fun m => m.2.describe m.2.default)
+     = some "hi"
+#guard ((RouteIndex.of programRoutes).matchTable .get ["users", "7"]).map
+       (fun m => m.2.describe m.2.default)
+     = some "user #7"
 
 end Routing

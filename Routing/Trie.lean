@@ -75,7 +75,7 @@ open Std.Http (Method)
 
 /-- A route table with a trie over its patterns. Build it once, with `RouteIndex.of`, and match
 requests against it with `respond?`. -/
-structure RouteIndex (result : Type) where
+structure RouteIndex (result : Type u) where
   routes : Array (Route result)
   trie : Internal.Trie
   /-- The trie is the one `RouteIndex.of` builds, so `RouteIndex.matchTable_eq` covers every index. -/
