@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.16.0] - 2026-11-23
+
+- Breaking: move to Lean v4.36.0; consumers must use the same toolchain.
+
 ## [0.15.3] - 2026-11-13
 
 - A route's result may live in any universe, so `Route`, `RouteIndex` and `dispatch` take a result in `Type u`.
